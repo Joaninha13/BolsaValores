@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="BoardGUI.cpp">
+    <ClCompile Include="BoardGUI.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

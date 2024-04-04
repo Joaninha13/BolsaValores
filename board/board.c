@@ -1,11 +1,4 @@
-#include <windows.h>
-#include <tchar.h>
-#include <math.h>
-
-#include <stdio.h>
-#include <fcntl.h> 
-#include <io.h>
-
+#include "utils.h"
 
 int _tmain(int argc, TCHAR* argv[]) {
 
@@ -17,6 +10,9 @@ int _tmain(int argc, TCHAR* argv[]) {
 	_setmode(_fileno(stdout), _O_WTEXT);
 	_setmode(_fileno(stderr), _O_WTEXT);
 #endif 
+
+
+
 
 	return 0;
 }
