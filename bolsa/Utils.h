@@ -26,27 +26,40 @@ typedef struct {
 
 } User;
 
+// Estrutura para responder/mandar mensagens ao cliente
+typedef struct {
+	TCHAR mensagem[TAM]; // Mensagem de resposta da bolsa
+	BOOL sucesso;
+} Response;
+
 typedef struct {
 
-	TCHAR empresa[TAM];
+	TCHAR company[TAM];
 	DWORD numAcoes[MAX_USERS], valor; // numAcoes[i] é o número de ações que o usuário i tem.
 	User usersVenda[MAX_USERS]; // usersVenda[i] é o usuário que está vendendo as ações numAcoes[i].
 
-} Empresas;
+} CompanyShares;
+
+// Estrutura para operações de compra/venda
+typedef struct {
+	BOOL isCompra; // TRUE para compra, FALSE para venda
+	TCHAR nomeEmpresa[TAM];
+	DWORD quantidadeAcoes;
+} Operation;
 
 
 typedef struct {
 
 	User users[MAX_USERS];
-	Empresas empresas[MAX_EMPRESAS];
+	CompanyShares company[MAX_EMPRESAS];
 
 } Bolsa;
 
 
 typedef struct {
 
-	Empresas acoes[MAX_ACOES_BOARD];
-	Empresas venda;
+	CompanyShares acoes[MAX_ACOES_BOARD];
+	CompanyShares venda;
 
 } MemoriaPartilhadaBoard;
 

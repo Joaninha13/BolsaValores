@@ -28,7 +28,7 @@ typedef struct {
 typedef struct {
     TCHAR nomeEmpresa[MAX_NOME];
     DWORD quantidadeAcoes;
-    float precoAcao; // O preço por ação
+    DWORD precoAcao; // O preço por ação
 } CompanyShares;
 
 // Estrutura para a carteira de ações do cliente
