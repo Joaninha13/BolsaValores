@@ -8,6 +8,15 @@
 #include <io.h>
 #include <string.h>
 
+#define REGISTRYPATH _T("Software\\TPSO2\\BolsaConfigNClients")
+
+#define PIPE_NAME TEXT("\\\\.\\pipe\\Game")
+
+
+#define FILE_MAPPING_NAME	_T("FILE_SHARE")
+#define EVENT_NAME			_T("SHARE_EVENT")
+#define MUTEX_NAME			_T("Mutex")
+#define TAM_COMAND			250
 #define TAM 100
 #define MAX_USERS 20
 #define MAX_EMPRESAS 30
@@ -28,8 +37,10 @@ typedef struct {
 
 // Estrutura para responder/mandar mensagens ao cliente
 typedef struct {
+	DWORD saldoAtualizado; // Saldo do usuário
 	TCHAR mensagem[TAM]; // Mensagem de resposta da bolsa
 	BOOL sucesso;
+
 } Response;
 
 typedef struct {
@@ -50,10 +61,14 @@ typedef struct {
 
 typedef struct {
 
+	HANDLE Hmutex, hEvent, hMap, hSem; // depois ver se é preciso mais alguma coisa
+
 	User users[MAX_USERS];
 	CompanyShares company[MAX_EMPRESAS];
 
-} Bolsa;
+	MemoryShare* memory;
+
+} BolsaThreads;
 
 
 typedef struct {
@@ -61,8 +76,5 @@ typedef struct {
 	CompanyShares acoes[MAX_ACOES_BOARD];
 	CompanyShares venda;
 
-} MemoriaPartilhadaBoard;
-
-
-
+} MemoryShare;
 

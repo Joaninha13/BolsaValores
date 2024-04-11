@@ -10,8 +10,8 @@
 #include <stdlib.h>
 #include <conio.h>
 #include <process.h>
-#include <threads.h>
 #include <time.h>
+
 
 #define MAX_EMPRESAS 30
 #define MAX_NOME 50
