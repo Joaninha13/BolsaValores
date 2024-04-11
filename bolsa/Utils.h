@@ -10,7 +10,7 @@
 
 #define REGISTRYPATH _T("Software\\TPSO2\\BolsaConfigNClients")
 
-#define PIPE_NAME TEXT("\\\\.\\pipe\\Game")
+#define PIPE_NAME _T("\\\\.\\pipe\\bolsa")
 
 
 #define FILE_MAPPING_NAME	_T("FILE_SHARE")
