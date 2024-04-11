@@ -10,7 +10,7 @@
 
 #define REGISTRYPATH _T("Software\\TPSO2\\BolsaConfigNClients")
 
-#define PIPE_NAME TEXT("\\\\.\\pipe\\Game")
+#define PIPE_NAME _T("\\\\.\\pipe\\bolsa")
 
 
 #define FILE_MAPPING_NAME	_T("FILE_SHARE")
@@ -35,14 +35,6 @@ typedef struct {
 
 } User;
 
-// Estrutura para responder/mandar mensagens ao cliente
-typedef struct {
-	DWORD saldoAtualizado; // Saldo do usuário
-	TCHAR mensagem[TAM]; // Mensagem de resposta da bolsa
-	BOOL sucesso;
-
-} Response;
-
 typedef struct {
 
 	TCHAR company[TAM];
@@ -51,12 +43,23 @@ typedef struct {
 
 } CompanyShares;
 
+
+
 // Estrutura para operações de compra/venda
 typedef struct {
 	BOOL isCompra; // TRUE para compra, FALSE para venda
 	TCHAR nomeEmpresa[TAM];
 	DWORD quantidadeAcoes;
 } Operation;
+
+// Estrutura para responder/mandar mensagens ao cliente
+typedef struct {
+	DWORD saldoAtualizado; // Saldo do usuário
+	TCHAR mensagem[TAM]; // Mensagem de resposta da bolsa
+	BOOL sucesso;
+
+} Response;
+
 
 
 typedef struct {
@@ -69,7 +72,6 @@ typedef struct {
 	MemoryShare* memory;
 
 } BolsaThreads;
-
 
 typedef struct {
 
