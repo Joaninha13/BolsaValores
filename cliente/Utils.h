@@ -46,11 +46,15 @@ typedef struct {
     DWORD quantidadeAcoes;
 } Operation;
 
-// Estrutura para armazenar as respostas da bolsa
+// Estrutura para responder/mandar mensagens ao cliente
 typedef struct {
-    DWORD saldoAtualizado; // Saldo do usuário
-    TCHAR mensagem[MAX_NOME]; // Mensagem de resposta da bolsa
-    BOOL sucesso; 
+
+    User user; //Usuario a quem pertence a mensagem
+    Operation operacao; // Operação atual (compra/venda)
+    TCHAR mensagem[TAM]; // Mensagem de resposta da bolsa
+    BOOL sucesso; // TRUE se a operação foi bem sucedida, FALSE caso contrário
+    HANDLE hPipe; // Handle do pipe para responder ao cliente
+
 } Response;
 
 // Estrutura principal do cliente

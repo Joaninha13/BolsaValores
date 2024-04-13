@@ -34,7 +34,6 @@ typedef struct {
 	DWORD saldo;
 
 } User;
-
 typedef struct {
 
 	TCHAR company[TAM];
@@ -42,21 +41,20 @@ typedef struct {
 	User usersVenda[MAX_USERS]; // usersVenda[i] é o usuário que está vendendo as ações numAcoes[i].
 
 } CompanyShares;
-
-
-
 // Estrutura para operações de compra/venda
 typedef struct {
 	BOOL isCompra; // TRUE para compra, FALSE para venda
 	TCHAR nomeEmpresa[TAM];
 	DWORD quantidadeAcoes;
 } Operation;
-
 // Estrutura para responder/mandar mensagens ao cliente
 typedef struct {
-	DWORD saldoAtualizado; // Saldo do usuário
+
+	User user; //Usuario a quem pertence a mensagem
+	Operation operacao; // Operação atual (compra/venda)
 	TCHAR mensagem[TAM]; // Mensagem de resposta da bolsa
-	BOOL sucesso;
+	BOOL sucesso; // TRUE se a operação foi bem sucedida, FALSE caso contrário
+	HANDLE hPipe; // Handle do pipe para responder ao cliente
 
 } Response;
 
