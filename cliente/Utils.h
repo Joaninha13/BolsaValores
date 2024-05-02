@@ -19,25 +19,6 @@
 #define MAX_NOME 50
 #define TAM 100
 
-// Estrutura para autenticação do cliente
-typedef struct {
-    TCHAR username[TAM];
-    TCHAR password[TAM];
-    DWORD saldo; 
-} User;
-
-// Estrutura para representar ações de uma empresa 
-typedef struct {
-    TCHAR nomeEmpresa[MAX_NOME];
-    DWORD quantidadeAcoes;
-    DWORD precoAcao; // O preço por ação
-} CompanyShares;
-
-// Estrutura para a carteira de ações do cliente
-typedef struct {
-    CompanyShares acoes[MAX_EMPRESAS];
-    int numEmpresas; // Número de empresas diferentes na carteira
-} Wallet;
 
 // Estrutura para operações de compra/venda
 typedef struct {
@@ -49,7 +30,6 @@ typedef struct {
 // Estrutura para responder/mandar mensagens ao cliente
 typedef struct {
 
-    User user; //Usuario a quem pertence a mensagem
     Operation operacao; // Operação atual (compra/venda)
     TCHAR mensagem[TAM]; // Mensagem de resposta da bolsa
     BOOL sucesso; // TRUE se a operação foi bem sucedida, FALSE caso contrário
@@ -59,8 +39,6 @@ typedef struct {
 
 // Estrutura principal do cliente
 typedef struct {
-    User user; // Informações do usuário
-    Wallet wallet; // Carteira de ações do usuário
     Operation operacao; // Operação atual (compra/venda)
     Response resposta; // Resposta da última operação
 } Cliente;
