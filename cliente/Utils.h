@@ -25,12 +25,20 @@ typedef struct {
     BOOL isCompra; // TRUE para compra, FALSE para venda
     TCHAR nomeEmpresa[MAX_NOME];
     DWORD quantidadeAcoes;
+    TCHAR msg[TAM]; // Mensagem 
 } Operation;
+
+typedef struct {
+    TCHAR name[TAM];
+    DWORD numAcoes;
+    DWORD valor;
+} ListCompany;
 
 // Estrutura para responder/mandar mensagens ao cliente
 typedef struct {
 
     Operation operacao; // Operação atual (compra/venda)
+    ListCompany listCompany[MAX_EMPRESAS];
     TCHAR mensagem[TAM]; // Mensagem de resposta da bolsa
     BOOL sucesso; // TRUE se a operação foi bem sucedida, FALSE caso contrário
     HANDLE hPipe; // Handle do pipe para responder ao cliente
