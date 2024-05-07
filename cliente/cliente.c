@@ -82,7 +82,7 @@ void userInterface(HANDLE hPipe) {
         else if (_tcsncmp(operation.msg, _T("buy "), 4) == 0) {
             operation.isCompra = TRUE;
             TCHAR* context = NULL;
-            TCHAR* token = _tcstok_s(operation.msg, _T(" "), &context); // Skip "buy"
+            TCHAR* token = _tcstok_s(operation.msg, _T(" "), &context); // saltar "buy"
             token = _tcstok_s(NULL, _T(" "), &context); // Nome da empresa
             _tcscpy_s(operation.nomeEmpresa, MAX_NOME, token);
             token = _tcstok_s(NULL, _T(" "), &context); // Número de ações
@@ -97,7 +97,7 @@ void userInterface(HANDLE hPipe) {
         else if (_tcsncmp(operation.msg, _T("sell "), 5) == 0) {
             operation.isCompra = FALSE;
             TCHAR* context = NULL;
-            TCHAR* token = _tcstok_s(operation.msg, _T(" "), &context); // Skip "sell"
+            TCHAR* token = _tcstok_s(operation.msg, _T(" "), &context); // saltar "sell"
             token = _tcstok_s(NULL, _T(" "), &context); // Nome da empresa
             _tcscpy_s(operation.nomeEmpresa, MAX_NOME, token);
             token = _tcstok_s(NULL, _T(" "), &context); // Número de ações
