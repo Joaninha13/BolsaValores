@@ -4,7 +4,18 @@ BOOL isAuthenticated = FALSE;
 
 BOOL sendOperation(HANDLE hPipe, Operation* operation) {
     DWORD bytesWritten;
-    BOOL success = WriteFile(hPipe, operation, sizeof(Operation), &bytesWritten, NULL);
+    OVERLAPPED ov = { 0 };
+    HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    ov.hEvent = hEvent;
+
+    BOOL success = WriteFile(hPipe, operation, sizeof(Operation), &bytesWritten, &ov);
+    if (!success) {
+        if (GetLastError() == ERROR_IO_PENDING) {
+            WaitForSingleObject(hEvent, INFINITE);
+            success = GetOverlappedResult(hPipe, &ov, &bytesWritten, FALSE);
+        }
+    }
+    CloseHandle(hEvent);
     if (!success || bytesWritten == 0) {
         _tprintf(_T("Erro ao enviar operação: %d\n"), GetLastError());
         return FALSE;
@@ -31,16 +42,27 @@ HANDLE connectToServer() {
     return hPipe;
 }
 
+
 BOOL authenticate(HANDLE hPipe, Operation* operation) {
     TCHAR response[256];
     DWORD bytesRead;
+    OVERLAPPED ov = { 0 };
+    HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    ov.hEvent = hEvent;
 
     if (!sendOperation(hPipe, operation)) {
         _tprintf(_T("Falha ao enviar comando de login.\n"));
+        CloseHandle(hEvent);
         return FALSE;
     }
 
-    if (!ReadFile(hPipe, response, sizeof(response), &bytesRead, NULL) || bytesRead == 0) {
+    BOOL readSuccess = ReadFile(hPipe, response, sizeof(response), &bytesRead, &ov);
+    if (!readSuccess && GetLastError() == ERROR_IO_PENDING) {
+        WaitForSingleObject(hEvent, INFINITE);
+        readSuccess = GetOverlappedResult(hPipe, &ov, &bytesRead, FALSE);
+    }
+    CloseHandle(hEvent);
+    if (!readSuccess || bytesRead == 0) {
         _tprintf(_T("Falha ao receber resposta de login: %d\n"), GetLastError());
         return FALSE;
     }
@@ -48,7 +70,6 @@ BOOL authenticate(HANDLE hPipe, Operation* operation) {
     _tprintf(_T("Resposta: %s\n"), response);
     return _tcscmp(response, _T("Login bem-sucedido")) == 0;
 }
-
 void userInterface(HANDLE hPipe) {
     Operation operation = { 0 }; // Inicializa a estrutura a zeros
     TCHAR response[1024];
@@ -56,16 +77,16 @@ void userInterface(HANDLE hPipe) {
 
     while (TRUE) {
         if (!isAuthenticated) {
-            _tprintf(_T("Digite o comando 'login <username> <password>' para autenticar ou 'sair' para encerrar: "));
+            _tprintf(_T("Digite o comando 'login <username> <password>' para autenticar ou 'exit' para encerrar: "));
         }
         else {
-            _tprintf(_T("Digite um comando ('buy', 'sell', 'listc', 'balance', 'sair'): "));
+            _tprintf(_T("Digite um comando ('buy', 'sell', 'listc', 'balance', 'exit'): "));
         }
 
         _fgetts(operation.msg, TAM, stdin);
         operation.msg[_tcslen(operation.msg) - 1] = '\0';  // Remove o caractere de nova linha
 
-        if (_tcscmp(operation.msg, _T("sair")) == 0) break;
+        if (_tcscmp(operation.msg, _T("exit")) == 0) break;
 
         if (_tcsncmp(operation.msg, _T("login "), 6) == 0) {
             if (authenticate(hPipe, &operation)) {
