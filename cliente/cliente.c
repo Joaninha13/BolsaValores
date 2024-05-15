@@ -10,11 +10,16 @@ BOOL sendOperation(HANDLE hPipe, Response* response) {
     HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
     ov.hEvent = hEvent;
 
-    BOOL success = WriteFile(hPipe, response, sizeof(Response), &bytesWritten, &ov);
+    _tprintf(_T("~Entrei aqui\n"));
+
+    BOOL success = WriteFile(hPipe, &response, sizeof(Response), &bytesWritten, &ov);
     if (!success) {
         if (GetLastError() == ERROR_IO_PENDING) {
             WaitForSingleObject(hEvent, INFINITE);
-            success = GetOverlappedResult(hPipe, &ov, &bytesWritten, FALSE);
+
+            _tprintf(_T(" Escrevi NBytes -> %d\n"), bytesWritten);
+
+            //success = GetOverlappedResult(hPipe, &ov, &bytesWritten, FALSE);
         }
     }
     CloseHandle(hEvent);

@@ -26,6 +26,7 @@
 #define MAX_USERS			20
 #define MAX_EMPRESAS		30
 #define MAX_ACOES_BOARD		10
+#define MAX_ACOES_USER		5
 
 
 typedef struct {
@@ -53,8 +54,7 @@ typedef struct {
 
 // Estrutura para a carteira de ações do cliente
 typedef struct {
-	User user;
-	CompanyShares acoes[MAX_EMPRESAS];
+	ListCompany acoes[MAX_ACOES_USER]; // Ações do usuário
 	int numEmpresas; // Número de empresas diferentes na carteira
 } Wallet;
 
@@ -82,10 +82,8 @@ typedef struct {
 
 typedef struct {
 
-	//TopAcoes decrescente
-
 	CompanyShares topAcoes[MAX_EMPRESAS];
-	CompanyShares venda;
+	ListCompany venda;
 	BOOL isCompra; // TRUE para compra, FALSE para venda
 
 } MemoryShare;
@@ -112,7 +110,6 @@ typedef struct {
 
 typedef struct {
 
-	Operation operacao;
 	Response resp;
 
 	BolsaThreads* bolsaData; // Ponteiro para a estrutura BolsaThreads é preciso para aceder aos hPipes[Nclientes]
