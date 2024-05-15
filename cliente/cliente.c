@@ -1,3 +1,5 @@
+
+Copiar código
 #include "Utils.h"
 
 BOOL isAuthenticated = FALSE;
@@ -43,8 +45,8 @@ HANDLE connectToServer() {
 }
 
 BOOL authenticate(HANDLE hPipe, Response* response) {
-    TCHAR responseBuffer[256];
-    DWORD bytesRead;
+    TCHAR responseBuffer[256] = { 0 };
+    DWORD bytesRead = 0;
     OVERLAPPED ov = { 0 };
     HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
     ov.hEvent = hEvent;
@@ -73,8 +75,8 @@ BOOL authenticate(HANDLE hPipe, Response* response) {
 DWORD WINAPI userInterfaceThread(LPVOID lpParam) {
     HANDLE hPipe = (HANDLE)lpParam;
     Response response = { 0 }; // Inicializa a estrutura a zeros
-    TCHAR responseBuffer[1024];
-    DWORD bytesRead;
+    TCHAR responseBuffer[1024] = { 0 };
+    DWORD bytesRead = 0;
 
     while (TRUE) {
         if (!isAuthenticated) {
