@@ -41,7 +41,7 @@ typedef struct {
     ListCompany listCompany[MAX_EMPRESAS];
     TCHAR mensagem[TAM]; // Mensagem de resposta da bolsa
     BOOL sucesso; // TRUE se a operação foi bem sucedida, FALSE caso contrário
-    HANDLE hPipe; // Handle do pipe para responder ao cliente
+    //HANDLE hPipe; // Handle do pipe para responder ao cliente
 
 } Response;
 
