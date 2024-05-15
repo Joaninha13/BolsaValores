@@ -1,5 +1,3 @@
-
-Copiar código
 #include "Utils.h"
 
 BOOL isAuthenticated = FALSE;
