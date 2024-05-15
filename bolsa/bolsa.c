@@ -98,6 +98,7 @@ BOOL lerFicheiroCompanys(TCHAR* nomeArquivo, CompanyShares* comp) {
 BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 
 	int auxi = 0;
+	Response resp;
 
 	TCHAR first[TAM_COMAND], secon[TAM_COMAND], third[TAM_COMAND], four[TAM_COMAND];
 	TCHAR* context = NULL;
@@ -136,6 +137,11 @@ BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 				_tprintf(_T("Empresa %s adicionada com sucesso\n"), data->company[i].name);
 				break;
 			}
+
+			CopyMemory(data->memory->topAcoes, &data->company, sizeof(CompanyShares));
+			SetEvent(data->hEvent);
+
+			ResetEvent(data->hEvent);
 			ReleaseMutex(data->hMutexData);
 		}
 
@@ -148,6 +154,12 @@ BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 
 		if (lerFicheiroCompanys(secon, data->company))
 			_tprintf(_T("Dados lidos com sucesso do ficheiro Empresas\n"));
+
+
+		CopyMemory(data->memory->topAcoes, &data->company, sizeof(CompanyShares));
+
+		SetEvent(data->hEvent);
+		ResetEvent(data->hEvent);
 
 		ReleaseMutex(data->hMutexData);
 	}
@@ -172,8 +184,19 @@ BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 			if (_tcscmp(data->company[i].name, secon) == 0) {
 				data->company[i].valor = _tstof(third);
 				_tprintf(_T("O valor da ação da empresa %s foi alterado para %.2f\n"), data->company[i].name, data->company[i].valor);
+
+				// por um valor na resposta com o nome da empresa e o valor novo
+
+				_sntprintf_s(resp.mensagem, TAM, _T("O valor da ação da empresa %s foi alterado para %.2f\n"), data->company[i].name, data->company[i].valor);
+
+				escreveCli(data->hPipes, resp);
+
 				break;
 			}
+
+
+			CopyMemory(data->memory->topAcoes, &data->company, sizeof(CompanyShares));
+			SetEvent(data->hEvent);
 
 			ReleaseMutex(data->hMutexData);
 		}
@@ -196,9 +219,14 @@ BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 	else if (_tcscmp(first, _T("pause")) == 0) {
 		//Este comando faz com que as operações de compra e venda sejam suspensas (ignoradas) durante um período de tempo.Qualquer pedido de compra e venda que surja nesse período não será concretizado.
 	}
-
+	
 	else if (_tcscmp(first, _T("close")) == 0) {
 		//Permite encerrar o sistema. Todos os clientes e boards serão notificados, devendo terminar de seguida. 
+
+		_tcscpy_s(resp.mensagem, TAM, _T("close"));
+
+		escreveCli(data->hPipes, resp);
+
 	}
 	else {
 		_tprintf(_T("Comando inválido\n"));
@@ -292,33 +320,6 @@ BOOL InicializaAll(BolsaThreads* all) {
 	return TRUE;
 }
 
-BOOL testarMemoria(BolsaThreads* data) {
-
-	MemoryShare dataMem;
-
-	dataMem.isCompra = FALSE;
-	dataMem.venda.numAcoes[0] = 100;
-	dataMem.venda.valor = 50;
-
-
-	WaitForSingleObject(data->hMutex, INFINITE);
-
-	//CopyMemory(data->memory, &dataMem, sizeof(MemoryShare));
-
-	data->memory->isCompra = FALSE;
-	data->memory->venda.numAcoes[0] = 100;
-	data->memory->venda.valor = 50;
-
-	ReleaseMutex(data->hMutex);
-
-	SetEvent(data->hEvent);
-
-	ResetEvent(data->hEvent);
-
-	return TRUE;
-
-}
-
 
 //acabar estas duas funcoes
 DWORD WINAPI trataCliente(LPVOID data) {
@@ -327,6 +328,7 @@ DWORD WINAPI trataCliente(LPVOID data) {
 	DWORD nBytes;
 	BOOL rSuccess, wSuccess;
 	Response resp;
+	Wallet wallet;
 
 	OVERLAPPED ov;
 	HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL); //Evento para avisar que ja leu....
@@ -346,6 +348,8 @@ DWORD WINAPI trataCliente(LPVOID data) {
 				_tprintf(_T("Agendei uma leitura no cliente %d\n"), pdata->id);
 
 				WaitForSingleObject(hEvent, INFINITE);
+
+				_tprintf(_T(" Recebi NBytes -> %d\n"), nBytes);
 
 				rSuccess = GetOverlappedResult(pdata->hPipe, &ov, &nBytes, FALSE); //ver se é preciso
 
@@ -384,6 +388,7 @@ DWORD WINAPI trataCliente(LPVOID data) {
 
 									_tcscpy_s(resp.mensagem, TAM_COMAND, _T("Login com Sucesso"));
 									resp.sucesso = TRUE;
+
 									break;
 								}
 								else {
@@ -404,8 +409,21 @@ DWORD WINAPI trataCliente(LPVOID data) {
 					
 					else if (_tcscmp(pdata->resp.mensagem, _T("logout") == 0)) {
 						//logout
+
 						_tcscpy_s(resp.mensagem, TAM_COMAND, _T("Logout com sucesso, BYE"));
 						pdata->continua = FALSE;
+
+						WaitForSingleObject(pdata->bolsaData->hMutexData, INFINITE);
+
+						for (int i = 0; i < MAX_USERS; i++){
+							if (pdata->bolsaData->users[i].hPipe == pdata->hPipe) {
+								pdata->bolsaData->users[i].ativo = FALSE;
+							}
+							
+						}
+
+						ReleaseMutex(pdata->bolsaData->hMutexData);
+
 					}
 					
 					else if (_tcscmp(pdata->resp.mensagem, _T("saldo") == 0)) {
@@ -427,10 +445,232 @@ DWORD WINAPI trataCliente(LPVOID data) {
 					
 					else if (_tcscmp(pdata->resp.mensagem, _T("compra") == 0)) {
 						//compra
+						int auxNumAcoes = 0;
+
+						WaitForSingleObject(pdata->bolsaData->hMutexData, INFINITE);
+
+						for (int i = 0; i < MAX_EMPRESAS; i++) {
+							if (_tcscmp(pdata->bolsaData->company[i].name, pdata->resp.operacao.nomeEmpresa) == 0) {
+
+								for (int j = 0; j < MAX_USERS; j++){
+									if(pdata->bolsaData->company[i].numAcoes[j] != NULL)
+										auxNumAcoes += pdata->bolsaData->company[i].numAcoes[j];
+								}
+
+
+								if (auxNumAcoes >= pdata->resp.operacao.quantidadeAcoes) {
+									for (int j = 0; j < MAX_USERS; j++) {
+										if (pdata->bolsaData->users[j].hPipe == pdata->hPipe) { // ver qual o user que esta a fazer a compra
+											if (pdata->bolsaData->users[j].saldo >= pdata->resp.operacao.quantidadeAcoes * pdata->bolsaData->company[i].valor) { // ver se tem saldo suficiente
+
+												int quantidadeAComprar = pdata->resp.operacao.quantidadeAcoes;
+
+												
+												for(int k = 0; k < MAX_USERS && quantidadeAComprar > 0; k++) {
+													if (pdata->bolsaData->company[i].numAcoes[k] > 0) {
+														int acoesDisponiveis = pdata->bolsaData->company[i].numAcoes[k];
+
+
+														if (acoesDisponiveis >= quantidadeAComprar) {
+
+															//se o user que esta a vender for o mesmo que esta a comprar, entao nao fazer nada
+															if (_tcscmp(pdata->bolsaData->users[j].userName, pdata->bolsaData->company[i].usersVenda[k].userName) == 0) {
+																continue;
+															}
+
+															pdata->bolsaData->company[i].numAcoes[k] -= quantidadeAComprar;
+
+															//Por o saldo na conta do user que esta a vender
+															if ( pdata->bolsaData->company[i].usersVenda[k].userName != NULL || _tcscmp(pdata->bolsaData->company[i].usersVenda[k].userName, _T("")) != 0) {
+																
+																for (int l = 0; l < MAX_ACOES_USER; l++) {
+																
+																	if (_tcscmp(pdata->bolsaData->users[l].userName, pdata->bolsaData->company[i].usersVenda[k].userName) == 0) {
+																		pdata->bolsaData->users[l].saldo += pdata->bolsaData->company[i].valor * quantidadeAComprar;
+																	}
+
+																}
+
+															}
+
+															pdata->bolsaData->memory->isCompra = TRUE;
+															pdata->bolsaData->memory->venda.numAcoes = quantidadeAComprar;
+															pdata->bolsaData->memory->venda.valor = pdata->bolsaData->company[i].valor;
+															SetEvent(pdata->bolsaData->hEvent);
+
+															//Por na wallet do user
+															for (int l = 0; l < MAX_ACOES_USER; l++){
+
+																//se ja tiver a acao, entao so acrescentar
+																if (_tcscmp(wallet.acoes[l].name, pdata->bolsaData->company[j].name) == 0) {
+																	wallet.acoes[l].numAcoes += quantidadeAComprar;
+																}
+																//se nao tiver a acao, entao por na wallet
+																else if (wallet.acoes[l].name == NULL || _tcscmp(wallet.acoes[l].name, _T("")) == 0) {
+																	_tcscpy_s(wallet.acoes[l].name, TAM ,pdata->bolsaData->company[j].name);
+																	wallet.acoes[l].numAcoes = quantidadeAComprar;
+																}
+
+															}
+
+															quantidadeAComprar = 0;
+														}
+														else {
+															pdata->bolsaData->company[i].numAcoes[k] = 0;
+
+															//se o user que esta a vender for o mesmo que esta a comprar, entao nao fazer nada
+															if (_tcscmp(pdata->bolsaData->users[j].userName, pdata->bolsaData->company[i].usersVenda[k].userName) == 0) {
+																continue;
+															}
+
+															pdata->bolsaData->company[i].numAcoes[k] -= acoesDisponiveis;
+
+															//Por o saldo na conta do user que esta a vender
+															if (pdata->bolsaData->company[i].usersVenda[k].userName != NULL || _tcscmp(pdata->bolsaData->company[i].usersVenda[k].userName, _T("")) != 0) {
+
+																for (int l = 0; l < MAX_ACOES_USER; l++) {
+
+																	if (_tcscmp(pdata->bolsaData->users[l].userName, pdata->bolsaData->company[i].usersVenda[k].userName) == 0) {
+																		pdata->bolsaData->users[l].saldo += pdata->bolsaData->company[i].valor * acoesDisponiveis;
+																	}
+
+																}
+
+																pdata->bolsaData->memory->isCompra = TRUE;
+																pdata->bolsaData->memory->venda.numAcoes = acoesDisponiveis;
+																pdata->bolsaData->memory->venda.valor = pdata->bolsaData->company[i].valor;
+																SetEvent(pdata->bolsaData->hEvent);
+															}
+
+															//Por na wallet do user
+															for (int l = 0; l < MAX_ACOES_USER; l++) {
+
+																//se ja tiver a acao, entao so acrescentar
+																if (_tcscmp(wallet.acoes[l].name, pdata->bolsaData->company[j].name) == 0) {
+																	wallet.acoes[l].numAcoes += acoesDisponiveis;
+																}
+																//se nao tiver a acao, entao por na wallet
+																else if (wallet.acoes[l].name == NULL || _tcscmp(wallet.acoes[l].name, _T("")) == 0) {
+																	_tcscpy_s(wallet.acoes[l].name, TAM, pdata->bolsaData->company[j].name);
+																	wallet.acoes[l].numAcoes = acoesDisponiveis;
+																}
+
+															}
+
+															quantidadeAComprar -= acoesDisponiveis;
+														}
+
+
+													}
+												}
+
+												pdata->bolsaData->users[j].saldo -= pdata->resp.operacao.quantidadeAcoes * pdata->bolsaData->company[i].valor;
+
+												_tcscpy_s(resp.mensagem, TAM, _T("Compra efetuada com sucesso"));
+												resp.sucesso = TRUE;
+
+												//por as coisas na memoria partilhada
+
+												CopyMemory(pdata->bolsaData->memory->topAcoes, &pdata->bolsaData->company, sizeof(CompanyShares));
+												SetEvent(pdata->bolsaData->hEvent);
+
+											}
+											else {
+												_tcscpy_s(resp.mensagem, TAM, _T("Saldo insuficiente"));
+												resp.sucesso = FALSE;
+											}
+										}
+									}
+								}
+								else {
+									_tcscpy_s(resp.mensagem, TAM, _T("Ações insuficientes, so ah %d"), auxNumAcoes);
+									resp.sucesso = FALSE;
+								}
+							}
+
+						}
+
+						ReleaseMutex(pdata->bolsaData->hMutexData);
+
 					}
 					
 					else if (_tcscmp(pdata->resp.mensagem, _T("venda") == 0)) {
 						//venda
+
+						TCHAR username[TAM];
+
+						WaitForSingleObject(pdata->bolsaData->hMutexData, INFINITE);
+						
+						//buscar o username do user que esta a vender
+						for (int i = 0; i < MAX_USERS; i++) {
+							if (pdata->bolsaData->users[i].hPipe == pdata->hPipe) {
+								_tcscpy_s(username, TAM, pdata->bolsaData->users[i].userName);
+								break;
+							}
+						}
+
+						//verificar se o user tem a acao e se tem a quantidade de acoes que quer vender na wallet
+					
+						for (int l = 0; l < MAX_ACOES_USER; l++){
+
+							//se ja tiver a acao, entao so acrescentar
+							if (_tcscmp(pdata->resp.operacao.nomeEmpresa, wallet.acoes[l].name) == 0) {
+								//se tiver a quantidade de acoes que quer vender
+								if (wallet.acoes[l].numAcoes >= pdata->resp.operacao.quantidadeAcoes) {
+
+									wallet.acoes[l].numAcoes -= pdata->resp.operacao.quantidadeAcoes;
+
+									for (int i = 0; i < MAX_EMPRESAS; i++) {
+
+										if (_tcscmp(pdata->bolsaData->company[i].name, pdata->resp.operacao.nomeEmpresa) == 0) {
+
+											for (int j = 0; j < MAX_USERS; j++) {
+
+												
+												if (pdata->bolsaData->company[i].numAcoes[j] != NULL || pdata->bolsaData->company[i].numAcoes[j] != 0) {
+
+													if (_tcscmp(pdata->bolsaData->company[i].usersVenda[j].userName, username) == 0) {
+														pdata->bolsaData->company[i].numAcoes[j] += pdata->resp.operacao.quantidadeAcoes;
+														break;
+													}
+												}
+
+												else if (pdata->bolsaData->company[i].numAcoes[j] == NULL || pdata->bolsaData->company[i].numAcoes[j] == 0) {
+													pdata->bolsaData->company[i].numAcoes[j] = pdata->resp.operacao.quantidadeAcoes;
+													_tcscpy_s(pdata->bolsaData->company[i].usersVenda[j].userName, TAM, username);
+													break;
+												}
+
+											}
+
+											pdata->bolsaData->memory->isCompra = FALSE;
+											pdata->bolsaData->memory->venda.numAcoes = pdata->resp.operacao.quantidadeAcoes;
+											pdata->bolsaData->memory->venda.valor = pdata->bolsaData->company[i].valor;
+											SetEvent(pdata->bolsaData->hEvent);
+
+
+											break;
+										}
+
+									}
+
+								}
+								else {
+									_tcscpy_s(resp.mensagem, TAM, _T("Acoes insuficientes"));
+									resp.sucesso = FALSE;
+								}
+
+							}
+							//se nao tiver a acao, entao nao fazer nada
+							else if (wallet.acoes[l].name == NULL || _tcscmp(wallet.acoes[l].name, _T("")) == 0) {
+								_tcscpy_s(resp.mensagem, TAM, _T("Acao nao encontrada"));
+								resp.sucesso = FALSE;
+							}
+
+						}
+
+						ReleaseMutex(pdata->bolsaData->hMutexData);
+
 					}
 					
 					else if (_tcscmp(pdata->resp.mensagem, _T("listc") == 0)) {
@@ -460,6 +700,9 @@ DWORD WINAPI trataCliente(LPVOID data) {
 					else {
 						_tprintf(_T("Comando inválido\n"));
 
+						_tcscpy_s(resp.mensagem, TAM_COMAND, _T("Comando invalido"));
+						resp.sucesso = FALSE;
+
 					}
 				}
 				else {
@@ -474,6 +717,13 @@ DWORD WINAPI trataCliente(LPVOID data) {
 		}
 
 		//Depois mandar de volta a estrutura Response com a resposta
+
+		if (!WriteFile(pdata->hPipe, &resp, sizeof(Response), &nBytes, NULL)) {
+			_tprintf(_T("[ERRO] Escrever no pipe! (WriteFile)\n"));
+			exit(-1);
+		}
+
+		_tprintf(_T("[SERVIDOR] Enviei %d bytes ao cliente %d...(WriteFile)\n"), nBytes, pdata->id);
 
 
 	} while (pdata->continua);
@@ -492,14 +742,49 @@ DWORD WINAPI trataCliente(LPVOID data) {
 	return 0;
 
 }
-DWORD WINAPI escreveCli() {
+
+BOOL escreveCli(HANDLE *hPipes, Response resp) {
 
 
+	DWORD nBytes;
+	OVERLAPPED ov;
+	HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL); //Evento para avisar que ja leu....
 
+	ZeroMemory(&ov, sizeof(OVERLAPPED));
 
+	ov.hEvent = hEvent;
 
+	for (int i = 0; i < NCLIENTES; i++){
+		
+		if (hPipes[i] != NULL) {
 
-	return 0;
+			if (!WriteFile(hPipes[i], &resp, sizeof(Response), &nBytes, &ov)) {
+
+				if (GetLastError() == ERROR_IO_PENDING) {
+					_tprintf(_T("Escrita agendada no cliente %d com sucesso enviados %d\n"), i, nBytes);
+
+					WaitForSingleObject(hEvent, INFINITE);
+
+					if (GetOverlappedResult(hPipes, &ov, &nBytes, FALSE)) {
+						_tprintf(_T("Escrita no cliente com sucesso\n"));
+					}
+					else {
+						_tprintf(_T("Erro na escrita no cliente\n"));
+					}
+				}
+				else {
+					_tprintf(_T("Erro na escrita no cliente\n"));
+				}
+			}
+			else {
+				_tprintf(_T("Escrita instantania no cliente %d com sucesso enviados %d\n"), i, nBytes);
+			}
+
+		}
+
+	}
+
+	return TRUE;
 }
 
 
@@ -613,32 +898,11 @@ int _tmain(int argc, TCHAR* argv[]) {
 
 	//Criar a thread que vai tratar da criação dos Named Pipes e das threads para cada cliente.
 	hThread[0] = CreateThread(NULL, 0, createPipe, (LPVOID)&dataThreads, 0, NULL);
+	if (hThread[0] == NULL) {
+		_tprintf(_T("[ERRO] Criar a thread! (CreateThread)\n"));
+		exit(-1);
+	}
 
-	//Criar a thread que vai atualizar a memoria partilhada
-	//hThread[0] = CreateThread(NULL, 0, AtualizaMemoria, &dataThreads, 0, NULL);
-
-
-	//Era para testar se a escrita na memoria partilhada estava a funcionar, e esta a dar e tem que ser assim
-	//Sleep(10000);
-	//testarMemoria(&dataThreads);
-	//ZeroMemory(&dataThreads, sizeof(BolsaThreads));
-	//para testes
-	// 
-	//for (int i = 0; i < 5; i++) {
-	//	swprintf_s(dataThreads.company[i].name, TAM, _T("empresa%d"), i + 1);
-	//	dataThreads.company[i].valor = 100 + i * 10;
-	//	dataThreads.company[i].numAcoes[0] = 1000 + i * 100;
-	//}
-	//for (int i = 0; i < 5; i++) {
-	//	swprintf_s(dataThreads.users[i].userName, TAM, _T("user%d"), i + 1);
-	//	dataThreads.users[i].saldo = 1000 + i * 100;
-	//	dataThreads.users[i].ativo = TRUE;
-	//
-	//}
-	//swprintf_s(dataThreads.users[5].userName, TAM, _T("user%d"), 5 + 1);
-
-	//dataThreads.users[5].saldo = 1000 + 5 * 100;
-	//dataThreads.users[5].ativo = FALSE;
 
 
 	do {

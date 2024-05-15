@@ -26,19 +26,23 @@ typedef struct {
 
 typedef struct {
 
-	TCHAR empresa[TAM];
-	DWORD numAcoes[MAX_USERS], valor; // numAcoes[i] é o número de ações que o usuário i tem.
-	User usersVenda[MAX_USERS]; // usersVenda[i] é o usuário que está vendendo as ações numAcoes[i].
+	TCHAR name[TAM];
+	DWORD numAcoes[MAX_USERS]; // numAcoes[i] é o número de ações que o usuário i tem. 
+	double valor;
+	User usersVenda[MAX_USERS]; // usersVenda[i] é o usuário que está vendendo as ações numAcoes[i]. o i = 0 é o unico null
 
 } CompanyShares;
 
+typedef struct {
+	TCHAR name[TAM];
+	DWORD numAcoes;
+	double valor;
+} ListCompany;
 
 typedef struct {
 
-	//TopAcoes decrescente
-
 	CompanyShares topAcoes[MAX_EMPRESAS];
-	CompanyShares venda;
+	ListCompany venda;
 	BOOL isCompra; // TRUE para compra, FALSE para venda
 
 } MemoryShare;

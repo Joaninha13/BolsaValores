@@ -57,6 +57,9 @@ DWORD WINAPI actualizaMostra(LPVOID dados) {
 
 	MemoryShare shared;
 
+	ZeroMemory(&shared, sizeof(MemoryShare));
+	ZeroMemory(td->shared, sizeof(MemoryShare));
+
 	do {
 
 		WaitForSingleObject(td->hEvent, INFINITE);
@@ -70,17 +73,18 @@ DWORD WINAPI actualizaMostra(LPVOID dados) {
 		ordenarDecrescente(&shared, MAX_EMPRESAS);
 
 		for (int i = 0; i < td->numEmpresas; i++)
-			_tprintf_s(_T("%d. %s - Valor da ação: %d\n"), i + 1, shared.topAcoes[i].empresa, shared.topAcoes[i].valor);
+			//if (_tcscmp(shared.topAcoes[i].name, _T("") != 0))
+				_tprintf_s(_T("%d. %s - Valor da ação: %.2f\n"), i + 1, shared.topAcoes[i].name, shared.topAcoes[i].valor);
 
 
-		if (shared.isCompra && shared.venda.empresa != NULL)
-			_tprintf_s(_T("Ultima Transação: Compra\n"));
+		if (shared.isCompra && shared.venda.name != NULL)
+			_tprintf_s(_T("Compra\n"));
 		else
-			_tprintf_s(_T("Ultima Transação: Venda\n"));
+			_tprintf_s(_T("Posto a Venda\n"));
 
-		_tprintf_s(_T("Empresa - %s\n"), shared.venda.empresa);
-		_tprintf_s(_T("Numero de Acções - %d\n"), shared.venda.numAcoes[0]);
-		_tprintf_s(_T("Valor - %d\n"), shared.venda.valor);
+		_tprintf_s(_T("Empresa - %s\n"), shared.venda.name);
+		_tprintf_s(_T("Numero de Acções - %d\n"), shared.venda.numAcoes);
+		_tprintf_s(_T("Valor - %.2f\n"), shared.venda.valor);
 
 	} while (td->continua);
 
