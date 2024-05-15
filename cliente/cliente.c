@@ -23,7 +23,6 @@ BOOL sendOperation(HANDLE hPipe, Response* response) {
     return TRUE;
 }
 
-
 HANDLE connectToServer() {
     HANDLE hPipe;
     hPipe = CreateFile(
@@ -32,7 +31,7 @@ HANDLE connectToServer() {
         0,
         NULL,
         OPEN_EXISTING,
-        0,
+        FILE_FLAG_OVERLAPPED,
         NULL);
 
     if (hPipe == INVALID_HANDLE_VALUE) {
@@ -43,40 +42,38 @@ HANDLE connectToServer() {
     return hPipe;
 }
 
-
-BOOL authenticate(HANDLE hPipe, TCHAR* credentials) {
-    Response response = { 0 };
-    _tcscpy_s(response.operacao.msg, TAM, credentials); 
-
-    if (!sendOperation(hPipe, &response)) {
-        _tprintf(_T("Falha ao enviar comando de login.\n"));
-        return FALSE;
-    }
-
+BOOL authenticate(HANDLE hPipe, Response* response) {
+    TCHAR responseBuffer[256];
     DWORD bytesRead;
     OVERLAPPED ov = { 0 };
     HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
     ov.hEvent = hEvent;
 
-    BOOL readSuccess = ReadFile(hPipe, &response, sizeof(response), &bytesRead, &ov);
+    if (!sendOperation(hPipe, response)) {
+        _tprintf(_T("Falha ao enviar comando de login.\n"));
+        CloseHandle(hEvent);
+        return FALSE;
+    }
+
+    BOOL readSuccess = ReadFile(hPipe, responseBuffer, sizeof(responseBuffer), &bytesRead, &ov);
     if (!readSuccess && GetLastError() == ERROR_IO_PENDING) {
         WaitForSingleObject(hEvent, INFINITE);
         readSuccess = GetOverlappedResult(hPipe, &ov, &bytesRead, FALSE);
     }
     CloseHandle(hEvent);
-
     if (!readSuccess || bytesRead == 0) {
         _tprintf(_T("Falha ao receber resposta de login: %d\n"), GetLastError());
         return FALSE;
     }
 
-    _tprintf(_T("Resposta: %s\n"), response.mensagem);
-    return _tcscmp(response.mensagem, _T("Login bem-sucedido")) == 0;
+    _tprintf(_T("Resposta: %s\n"), responseBuffer);
+    return _tcscmp(responseBuffer, _T("Login bem-sucedido")) == 0;
 }
 
-void userInterface(HANDLE hPipe) {
+DWORD WINAPI userInterfaceThread(LPVOID lpParam) {
+    HANDLE hPipe = (HANDLE)lpParam;
     Response response = { 0 }; // Inicializa a estrutura a zeros
-    TCHAR input[TAM];
+    TCHAR responseBuffer[1024];
     DWORD bytesRead;
 
     while (TRUE) {
@@ -87,13 +84,13 @@ void userInterface(HANDLE hPipe) {
             _tprintf(_T("Digite um comando ('buy', 'sell', 'listc', 'balance', 'exit'): "));
         }
 
-        _fgetts(input, TAM, stdin);
-        input[_tcslen(input) - 1] = '\0';  // Remove o caractere de nova linha
+        _fgetts(response.operacao.msg, TAM, stdin);
+        response.operacao.msg[_tcslen(response.operacao.msg) - 1] = '\0';  // Remove o caractere de nova linha
 
-        if (_tcscmp(input, _T("exit")) == 0) break;
+        if (_tcscmp(response.operacao.msg, _T("exit")) == 0) break;
 
-        if (_tcsncmp(input, _T("login "), 6) == 0) {
-            if (authenticate(hPipe, input)) {
+        if (_tcsncmp(response.operacao.msg, _T("login "), 6) == 0) {
+            if (authenticate(hPipe, &response)) {
                 isAuthenticated = TRUE;
                 _tprintf(_T("Autenticação bem-sucedida. Você agora pode executar outros comandos.\n"));
                 continue;
@@ -103,28 +100,65 @@ void userInterface(HANDLE hPipe) {
                 continue;
             }
         }
+        else if (_tcsncmp(response.operacao.msg, _T("buy "), 4) == 0) {
+            response.operacao.isCompra = TRUE;
+            TCHAR* context = NULL;
+            TCHAR* token = _tcstok_s(response.operacao.msg, _T(" "), &context); // saltar "buy"
+            token = _tcstok_s(NULL, _T(" "), &context); // Nome da empresa
+            _tcscpy_s(response.operacao.nomeEmpresa, MAX_NOME, token);
+            token = _tcstok_s(NULL, _T(" "), &context); // Número de ações
+            response.operacao.quantidadeAcoes = _tstoi(token);
 
-        if (!isAuthenticated) {
+            if (!sendOperation(hPipe, &response)) {
+                _tprintf(_T("Falha ao enviar comando 'buy'.\n"));
+                continue;
+            }
+        }
+        else if (_tcsncmp(response.operacao.msg, _T("sell "), 5) == 0) {
+            response.operacao.isCompra = FALSE;
+            TCHAR* context = NULL;
+            TCHAR* token = _tcstok_s(response.operacao.msg, _T(" "), &context); // saltar "sell"
+            token = _tcstok_s(NULL, _T(" "), &context); // Nome da empresa
+            _tcscpy_s(response.operacao.nomeEmpresa, MAX_NOME, token);
+            token = _tcstok_s(NULL, _T(" "), &context); // Número de ações
+            response.operacao.quantidadeAcoes = _tstoi(token);
+
+            if (!sendOperation(hPipe, &response)) {
+                _tprintf(_T("Falha ao enviar comando 'sell'.\n"));
+                continue;
+            }
+        }
+        else if (!isAuthenticated) {
             _tprintf(_T("Por favor, autentique-se usando o comando 'login <username> <password>'.\n"));
             continue;
         }
-
-        _tcscpy_s(response.operacao.msg, TAM, input); 
-
-        if (!sendOperation(hPipe, &response)) {
-            _tprintf(_T("Falha ao enviar comando.\n"));
-            continue;
+        else {
+            if (!sendOperation(hPipe, &response)) {
+                _tprintf(_T("Falha ao enviar comando: %d\n"), GetLastError());
+                continue;
+            }
         }
 
-        if (!ReadFile(hPipe, &response, sizeof(response), &bytesRead, NULL) || bytesRead == 0) {
+        OVERLAPPED ovRead = { 0 };
+        HANDLE hEventRead = CreateEvent(NULL, TRUE, FALSE, NULL);
+        ovRead.hEvent = hEventRead;
+
+        BOOL readSuccess = ReadFile(hPipe, responseBuffer, sizeof(responseBuffer), &bytesRead, &ovRead);
+        if (!readSuccess && GetLastError() == ERROR_IO_PENDING) {
+            WaitForSingleObject(hEventRead, INFINITE);
+            readSuccess = GetOverlappedResult(hPipe, &ovRead, &bytesRead, FALSE);
+        }
+        CloseHandle(hEventRead);
+        if (!readSuccess || bytesRead == 0) {
             _tprintf(_T("Falha ao receber resposta: %d\n"), GetLastError());
             continue;
         }
 
-        _tprintf(_T("Resposta: %s\n"), response.mensagem);
+        _tprintf(_T("Resposta: %s\n"), responseBuffer);
     }
-}
 
+    return 0;
+}
 
 int _tmain(int argc, TCHAR* argv[]) {
 #ifdef UNICODE
@@ -139,8 +173,17 @@ int _tmain(int argc, TCHAR* argv[]) {
         return 1;
     }
 
-    userInterface(hPipe);
+    DWORD threadId;
+    HANDLE hThread = CreateThread(NULL, 0, userInterfaceThread, hPipe, 0, &threadId);
+    if (hThread == NULL) {
+        _tprintf(_T("Falha ao criar a thread de interface do usuário: %d\n"), GetLastError());
+        CloseHandle(hPipe);
+        return 1;
+    }
 
+    WaitForSingleObject(hThread, INFINITE);
+
+    CloseHandle(hThread);
     CloseHandle(hPipe);
     return 0;
 }
