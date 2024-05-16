@@ -6,7 +6,7 @@ BOOL lerFicheiroUsers(TCHAR* nomeArquivo, User* usuario) {
 	FILE* arquivo;
 	if (_wfopen_s(&arquivo, nomeArquivo, _T("r")) != 0) {
 		_tprintf(_T("Erro ao abrir o arquivo.\n"));
-		return;
+		return FALSE;
 	}
 
 	TCHAR linha[256]; // Buffer para armazenar a linha do arquivo
@@ -95,6 +95,50 @@ BOOL lerFicheiroCompanys(TCHAR* nomeArquivo, CompanyShares* comp) {
 	return TRUE;
 }
 
+BOOL escreveCli(HANDLE* hPipes, Response resp) {
+
+
+	DWORD nBytes;
+	OVERLAPPED ov;
+	HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL); //Evento para avisar que ja leu....
+
+	ZeroMemory(&ov, sizeof(OVERLAPPED));
+
+	ov.hEvent = hEvent;
+
+	for (int i = 0; i < NCLIENTES; i++) {
+
+		if (hPipes[i] != NULL) {
+
+			if (!WriteFile(hPipes[i], &resp, sizeof(Response), &nBytes, &ov)) {
+
+				if (GetLastError() == ERROR_IO_PENDING) {
+					_tprintf(_T("Escrita agendada no cliente %d com sucesso enviados %d\n"), i, nBytes);
+
+					WaitForSingleObject(hEvent, INFINITE);
+
+					if (GetOverlappedResult(hPipes, &ov, &nBytes, FALSE)) {
+						_tprintf(_T("Escrita no cliente com sucesso\n"));
+					}
+					else {
+						_tprintf(_T("Erro na escrita no cliente\n"));
+					}
+				}
+				else {
+					_tprintf(_T("Erro na escrita no cliente\n"));
+				}
+			}
+			else {
+				_tprintf(_T("Escrita instantania no cliente %d com sucesso enviados %d\n"), i, nBytes);
+			}
+
+		}
+
+	}
+
+	return TRUE;
+}
+
 BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 
 	int auxi = 0;
@@ -127,24 +171,25 @@ BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 	if (_tcscmp(first, _T("addc")) == 0) {
 		//Acrescentar uma empresa
 
+		WaitForSingleObject(data->hMutexData, INFINITE);
+
 		for (DWORD i = 0; i < MAX_EMPRESAS; i++) {
-			WaitForSingleObject(data->hMutexData, INFINITE);
 			if (_tcscmp(data->company[i].name, _T("")) == 0) {
 				_tcscpy_s(data->company[i].name, TAM, secon);
 				data->company[i].numAcoes[0] = _tstoi(third);
 				data->company[i].valor = _tstof(four);
-				data->company[i].usersVenda[0].userName[0] = NULL;
-				_tprintf(_T("Empresa %s adicionada com sucesso\n"), data->company[i].name);
+				_tcscpy_s(data->company[i].usersVenda[0].userName, TAM, _T(""));
+				_tprintf(_T("%s adicionada com sucesso\n"), data->company[i].name);
 				break;
 			}
-
-			CopyMemory(data->memory->topAcoes, &data->company, sizeof(CompanyShares));
-			SetEvent(data->hEvent);
-
-			ResetEvent(data->hEvent);
-			ReleaseMutex(data->hMutexData);
 		}
 
+		CopyMemory(data->memory->topAcoes, &data->company, sizeof(CompanyShares));
+		SetEvent(data->hEvent);
+
+		ResetEvent(data->hEvent);
+
+		ReleaseMutex(data->hMutexData);
 		
 	}
 	//Done
@@ -189,7 +234,12 @@ BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 
 				_sntprintf_s(resp.mensagem, TAM, _T("O valor da ação da empresa %s foi alterado para %.2f\n"), data->company[i].name, data->company[i].valor);
 
-				escreveCli(data->hPipes, resp);
+				if (escreveCli(data->hPipes, resp)){
+					_tprintf(_T("Mensagem enviada com sucesso\n"));
+				}
+				else {
+					_tprintf(_T("Erro ao enviar mensagem\n"));
+				}
 
 				break;
 			}
@@ -228,6 +278,7 @@ BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 		escreveCli(data->hPipes, resp);
 
 	}
+
 	else {
 		_tprintf(_T("Comando inválido\n"));
 
@@ -258,7 +309,7 @@ BOOL InicializaAll(BolsaThreads* all) {
 			return FALSE;
 		}
 		
-	all->memory = (MemoryShare*)MapViewOfFile(all->hMap, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(MemoryShare));
+	all->memory = (MemoryShare*)MapViewOfFile(all->hMap, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, sizeof(MemoryShare));
 		if (all->memory == NULL) {
 			_tprintf(_T("Error : MapViewOfFile (%d)\n"), GetLastError());
 			return FALSE;
@@ -338,10 +389,16 @@ DWORD WINAPI trataCliente(LPVOID data) {
 	ReleaseMutex(pdata->bolsaData->trinco);
 
 	do {
+
+		memset(&resp, 0, sizeof(Response));
+
 		ZeroMemory(&ov, sizeof(OVERLAPPED));
 		ov.hEvent = hEvent;
 
-		rSuccess = ReadFile(pdata->hPipe, &pdata->resp, sizeof(Response), &nBytes, &ov); // mudar isto para o response so
+		//ZeroMemory(&resp, sizeof(Response));
+		
+
+		rSuccess = ReadFile(pdata->hPipe, &pdata->resp, sizeof(Response), &nBytes, &ov);	
 
 		if (!rSuccess) {
 			if (GetLastError() == ERROR_IO_PENDING) {
@@ -349,22 +406,36 @@ DWORD WINAPI trataCliente(LPVOID data) {
 
 				WaitForSingleObject(hEvent, INFINITE);
 
-				_tprintf(_T(" Recebi NBytes -> %d\n"), nBytes);
-
 				rSuccess = GetOverlappedResult(pdata->hPipe, &ov, &nBytes, FALSE); //ver se é preciso
 
-				if (rSuccess) {
+				_tprintf(_T(" Recebi NBytes -> %d\n"), nBytes);
+
+
+				_tprintf(_T("mensagem : %s\n"), pdata->resp.mensagem);
+				_tprintf(_T("sucesso : %d\n"), pdata->resp.sucesso);
+				_tprintf(_T("Empresa : %s\n"), pdata->resp.operacao.nomeEmpresa);
+				_tprintf(_T("quantidade : %d\n"), pdata->resp.operacao.quantidadeAcoes);
+				_tprintf(_T("mensagem : %d\n"), pdata->resp.operacao.isCompra);
+
+
+
+				if (rSuccess && nBytes > 0 && _tcscmp(pdata->resp.mensagem, _T("")) != 0) {
 					_tprintf(_T("Leitura do cliente %d com sucesso\n"), pdata->id);
 					_tprintf(_T("Comando : %s\n"), pdata->resp.mensagem);
 
-					if (_tcscmp(pdata->resp.mensagem, _T("login") == 0)) {
+					TCHAR* context = NULL;
+
+					TCHAR* token = _tcstok_s(pdata->resp.mensagem, _T(" "), &context);
+
+					//Done probably...
+					if (_tcscmp(token, _T("login")) == 0) {
 						//login username password
 
-						TCHAR* context = NULL;
-
-						TCHAR* token = _tcstok_s(pdata->resp.mensagem, _T(" "), &context);
+						_tprintf(_T("Login\n"));
 
 						TCHAR username[TAM_COMAND], password[TAM_COMAND];
+
+						token = _tcstok_s(NULL, _T(" "), &context);
 
 						if (token != NULL) {
 							_tcscpy_s(username, TAM_COMAND, token);
@@ -374,6 +445,9 @@ DWORD WINAPI trataCliente(LPVOID data) {
 						if (token != NULL) {
 							_tcscpy_s(password, TAM_COMAND, token);
 						}
+
+						_tprintf(_T("Username : %s\n"), username);
+						_tprintf(_T("Password : %s\n"), password);
 
 						WaitForSingleObject(pdata->bolsaData->hMutexData, INFINITE);
 
@@ -397,7 +471,7 @@ DWORD WINAPI trataCliente(LPVOID data) {
 									resp.sucesso = FALSE;
 								}
 							}
-							else {
+							else if (_tcscmp(pdata->bolsaData->users[i].userName, username) != 0 && i == MAX_USERS - 1){
 								_tprintf(_T("Utilizador não encontrado\n"));
 								_tcscpy_s(resp.mensagem, TAM_COMAND, _T("Utilizador nao encontrado"));
 								resp.sucesso = FALSE;
@@ -407,8 +481,9 @@ DWORD WINAPI trataCliente(LPVOID data) {
 						ReleaseMutex(pdata->bolsaData->hMutexData);
 					}
 					
-					else if (_tcscmp(pdata->resp.mensagem, _T("logout") == 0)) {
+					else if (_tcscmp(pdata->resp.mensagem, _T("exit")) == 0) {
 						//logout
+						_tprintf(_T("exit\n"));
 
 						_tcscpy_s(resp.mensagem, TAM_COMAND, _T("Logout com sucesso, BYE"));
 						pdata->continua = FALSE;
@@ -426,7 +501,8 @@ DWORD WINAPI trataCliente(LPVOID data) {
 
 					}
 					
-					else if (_tcscmp(pdata->resp.mensagem, _T("saldo") == 0)) {
+					//Done probably...
+					else if (_tcscmp(pdata->resp.mensagem, _T("balance")) == 0) {
 						//saldo
 
 						for (DWORD i = 0; i < MAX_USERS; i++) {
@@ -434,7 +510,7 @@ DWORD WINAPI trataCliente(LPVOID data) {
 
 							if (pdata->hPipe == pdata->bolsaData->users[i].hPipe) {
 								resp.sucesso = TRUE;
-								_tcscpy_s(resp.mensagem, TAM_COMAND, _T("Saldo : %.2f"), pdata->bolsaData->users[i].saldo);
+								_stprintf_s(resp.mensagem, TAM_COMAND, _T("Saldo: %.2f"), pdata->bolsaData->users[i].saldo);
 							}
 
 							ReleaseMutex(pdata->bolsaData->trinco);
@@ -443,9 +519,16 @@ DWORD WINAPI trataCliente(LPVOID data) {
 
 					}
 					
-					else if (_tcscmp(pdata->resp.mensagem, _T("compra") == 0)) {
+					else if (_tcscmp(pdata->resp.mensagem, _T("buy")) == 0) {
 						//compra
 						int auxNumAcoes = 0;
+
+						WaitForSingleObject(pdata->bolsaData->hMutexData, INFINITE);
+						for (DWORD i = 0; i < MAX_EMPRESAS; i++) {
+							if (_tcscmp(pdata->bolsaData->company[i].name, _T("")) != 0)
+								_tprintf(_T("Empresa %d: %s - Valor por ação : %.2f - Número de ações : %d\n"), i + 1, pdata->bolsaData->company[i].name, pdata->bolsaData->company[i].valor, pdata->bolsaData->company[i].numAcoes[0]);
+						}
+						ReleaseMutex(pdata->bolsaData->hMutexData);
 
 						WaitForSingleObject(pdata->bolsaData->hMutexData, INFINITE);
 
@@ -453,7 +536,7 @@ DWORD WINAPI trataCliente(LPVOID data) {
 							if (_tcscmp(pdata->bolsaData->company[i].name, pdata->resp.operacao.nomeEmpresa) == 0) {
 
 								for (int j = 0; j < MAX_USERS; j++){
-									if(pdata->bolsaData->company[i].numAcoes[j] != NULL)
+									if(pdata->bolsaData->company[i].numAcoes[j] != 0)
 										auxNumAcoes += pdata->bolsaData->company[i].numAcoes[j];
 								}
 
@@ -594,7 +677,7 @@ DWORD WINAPI trataCliente(LPVOID data) {
 
 					}
 					
-					else if (_tcscmp(pdata->resp.mensagem, _T("venda") == 0)) {
+					else if (_tcscmp(pdata->resp.mensagem, _T("sell")) == 0) {
 						//venda
 
 						TCHAR username[TAM];
@@ -647,7 +730,10 @@ DWORD WINAPI trataCliente(LPVOID data) {
 											pdata->bolsaData->memory->venda.numAcoes = pdata->resp.operacao.quantidadeAcoes;
 											pdata->bolsaData->memory->venda.valor = pdata->bolsaData->company[i].valor;
 											SetEvent(pdata->bolsaData->hEvent);
+											ResetEvent(pdata->bolsaData->hEvent);
 
+											_tcscpy_s(resp.mensagem, TAM, _T("Venda efetuada com sucesso"));
+											resp.sucesso = TRUE;
 
 											break;
 										}
@@ -673,7 +759,7 @@ DWORD WINAPI trataCliente(LPVOID data) {
 
 					}
 					
-					else if (_tcscmp(pdata->resp.mensagem, _T("listc") == 0)) {
+					else if (_tcscmp(pdata->resp.mensagem, _T("listc")) == 0) {
 						//listc
 
 						resp.sucesso = TRUE;
@@ -706,12 +792,13 @@ DWORD WINAPI trataCliente(LPVOID data) {
 					}
 				}
 				else {
-					_tprintf(_T("[ERRO] Ler do pipe do cliente %d"), pdata->id);
-					break;
+					_tprintf(_T("Cliente %d com mensagem vazia\n"), pdata->id);
+					_tcscpy_s(resp.mensagem, TAM_COMAND, _T("Comando vazio"));
+					resp.sucesso = FALSE;
 				}
 			}
 			else {
-				_tprintf(_T("[ERRO] Ler do pipe do cliente %d"), pdata->id);
+				_tprintf(_T("[ERRO] Ler do pipe do cliente %d\n"), pdata->id);
 				break;
 			}
 		}
@@ -736,57 +823,12 @@ DWORD WINAPI trataCliente(LPVOID data) {
 	pdata->bolsaData->hPipes[pdata->id] = NULL;
 	ReleaseMutex(pdata->bolsaData->trinco);
 	
-	_tprintf(_T("Cliente %d saiu"), pdata->id);
+	_tprintf(_T("Cliente %d saiu\n"), pdata->id);
 
 
 	return 0;
 
 }
-
-BOOL escreveCli(HANDLE *hPipes, Response resp) {
-
-
-	DWORD nBytes;
-	OVERLAPPED ov;
-	HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL); //Evento para avisar que ja leu....
-
-	ZeroMemory(&ov, sizeof(OVERLAPPED));
-
-	ov.hEvent = hEvent;
-
-	for (int i = 0; i < NCLIENTES; i++){
-		
-		if (hPipes[i] != NULL) {
-
-			if (!WriteFile(hPipes[i], &resp, sizeof(Response), &nBytes, &ov)) {
-
-				if (GetLastError() == ERROR_IO_PENDING) {
-					_tprintf(_T("Escrita agendada no cliente %d com sucesso enviados %d\n"), i, nBytes);
-
-					WaitForSingleObject(hEvent, INFINITE);
-
-					if (GetOverlappedResult(hPipes, &ov, &nBytes, FALSE)) {
-						_tprintf(_T("Escrita no cliente com sucesso\n"));
-					}
-					else {
-						_tprintf(_T("Erro na escrita no cliente\n"));
-					}
-				}
-				else {
-					_tprintf(_T("Erro na escrita no cliente\n"));
-				}
-			}
-			else {
-				_tprintf(_T("Escrita instantania no cliente %d com sucesso enviados %d\n"), i, nBytes);
-			}
-
-		}
-
-	}
-
-	return TRUE;
-}
-
 
 
 //DONE
@@ -814,7 +856,7 @@ DWORD WINAPI createPipe(LPVOID data) {
 		//Criar o pipe para o cliente
 		_tprintf(_T("[SERVIDOR] Criar a instancia do pipe '%s' ... (CreateNamedPipe)\n"), PIPE_NAME);
 
-		hPipe = CreateNamedPipe(PIPE_NAME, PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED, PIPE_WAIT | PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE, PIPE_UNLIMITED_INSTANCES, sizeof(PipeData), sizeof(PipeData), 1000, NULL);
+		hPipe = CreateNamedPipe(PIPE_NAME, PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED, PIPE_WAIT | PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE, PIPE_UNLIMITED_INSTANCES, sizeof(Response), sizeof(Response), 1000, NULL);
 		if (hPipe == INVALID_HANDLE_VALUE) {
 			_tprintf(_T("[ERRO] Criar Named Pipe! (CreateNamedPipe)"));
 			exit(-1);
@@ -837,6 +879,10 @@ DWORD WINAPI createPipe(LPVOID data) {
 				dataPipe[i].id = i;
 				dataPipe[i].bolsaData = pdata;
 				dataPipe[i].continua = TRUE;
+
+				_tprintf(_T("ID -> %d\n"), dataPipe[i].id);
+
+				_tprintf(_T("Pipe -> %d\n"), pdata->hPipes[i]);
 
 				hThreads[i] = CreateThread(NULL, 0, trataCliente, (LPVOID)&dataPipe[i], 0, NULL);
 				if (hThreads[i] == NULL) {
@@ -866,7 +912,6 @@ DWORD WINAPI createPipe(LPVOID data) {
 
 }
 
-
 int _tmain(int argc, TCHAR* argv[]) {
 
 	TCHAR comand[TAM_COMAND];
@@ -881,7 +926,7 @@ int _tmain(int argc, TCHAR* argv[]) {
 	_setmode(_fileno(stderr), _O_WTEXT);
 #endif 
 
-	ZeroMemory(&dataThreads, sizeof(BolsaThreads));
+	memset(&dataThreads, 0, sizeof(BolsaThreads));
 
 
 	if (argc != 2) {

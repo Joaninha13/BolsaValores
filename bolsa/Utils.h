@@ -21,7 +21,7 @@
 
 #define NCLIENTES			5
 #define TAM_COMAND			250
-#define TAM					100
+#define TAM					256
 #define MAX					256
 #define MAX_USERS			20
 #define MAX_EMPRESAS		30
@@ -62,7 +62,7 @@ typedef struct {
 // Estrutura para operações de compra/venda
 typedef struct {
 	BOOL isCompra; // TRUE para compra, FALSE para venda
-	TCHAR nomeEmpresa[TAM], msg[TAM];
+	TCHAR nomeEmpresa[TAM];
 	DWORD quantidadeAcoes;
 } Operation;
 
@@ -71,10 +71,10 @@ typedef struct {
 
 	//User user; //Usuario a quem pertence a mensagem
 
-	Operation operacao; // Operação atual (compra/venda)
-	ListCompany listCompany[MAX_EMPRESAS];
 	TCHAR mensagem[TAM]; // Mensagem de resposta da bolsa
 	BOOL sucesso; // TRUE se a operação foi bem sucedida, FALSE caso contrário
+	Operation operacao; // Operação atual (compra/venda)
+	ListCompany listCompany[MAX_EMPRESAS];
 
 	//HANDLE hPipe; // Handle do pipe para responder ao cliente
 

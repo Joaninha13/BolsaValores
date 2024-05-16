@@ -13,6 +13,8 @@ DWORD WINAPI recebeMSG(LPVOID data) {
         return 1;
     }
 
+    memset(&response, 0, sizeof(Response));
+
     do {
         ZeroMemory(&ov, sizeof(OVERLAPPED));
         ov.hEvent = hEvent;
@@ -33,19 +35,22 @@ DWORD WINAPI recebeMSG(LPVOID data) {
 
         _tprintf(_T("\n[Cliente] Recebi %d bytes: '%s'... (ReadFile)\n"), n, response.mensagem);
 
-    } while (_tcscmp(response.mensagem, _T("fim")));
+    } while (_tcscmp(response.mensagem, _T("close")));
+
+
 
     CloseHandle(hEvent);
     return 0;
 }
 
 void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
-    _tprintf(_T("[Cliente] Comando: "));
-    TCHAR* token = _tcstok(command, _T(" "));
+
+    TCHAR* context = NULL;
+    TCHAR* token = _tcstok_s(command, _T(" "), &context);
 
     if (_tcscmp(token, _T("login")) == 0) {
-        TCHAR* username = _tcstok(NULL, _T(" "));
-        TCHAR* password = _tcstok(NULL, _T(" "));
+        TCHAR* username = _tcstok_s(NULL, _T(" "), &context);
+        TCHAR* password = _tcstok_s(NULL, _T(" "), &context);
         if (username != NULL && password != NULL) {
             _stprintf_s(response->mensagem, TAM, _T("login %s %s"), username, password);
             *isLoggedIn = TRUE;
@@ -62,9 +67,14 @@ void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
         _stprintf_s(response->mensagem, TAM, _T("listc"));
     }
     else if (_tcscmp(token, _T("buy")) == 0) {
-        TCHAR* empresa = _tcstok(NULL, _T(" "));
-        TCHAR* quantidade = _tcstok(NULL, _T(" "));
+        TCHAR* empresa = _tcstok_s(NULL, _T(" "), &context);
+        TCHAR* quantidade = _tcstok_s(NULL, _T(" "), &context);
         if (empresa != NULL && quantidade != NULL) {
+
+            response->operacao.isCompra = TRUE;
+            _stprintf_s(response->operacao.nomeEmpresa, TAM, _T("%s"), empresa);
+            response->operacao.quantidadeAcoes = _tstoi(quantidade);
+
             _stprintf_s(response->mensagem, TAM, _T("buy %s %s"), empresa, quantidade);
         }
         else {
@@ -72,9 +82,16 @@ void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
         }
     }
     else if (_tcscmp(token, _T("sell")) == 0) {
-        TCHAR* empresa = _tcstok(NULL, _T(" "));
-        TCHAR* quantidade = _tcstok(NULL, _T(" "));
+        TCHAR* empresa = _tcstok_s(NULL, _T(" "), &context);
+        TCHAR* quantidade = _tcstok_s(NULL, _T(" "), &context);
         if (empresa != NULL && quantidade != NULL) {
+
+
+            response->operacao.isCompra = FALSE;
+            _stprintf_s(response->operacao.nomeEmpresa, TAM, _T("%s"), empresa);
+            response->operacao.quantidadeAcoes = _tstoi(quantidade);
+
+
             _stprintf_s(response->mensagem, TAM, _T("sell %s %s"), empresa, quantidade);
         }
         else {
@@ -94,6 +111,7 @@ void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
 
 int _tmain(int argc, LPTSTR argv[]) {
     Response response;
+    TCHAR aux[TAM];
     HANDLE hPipe, hThread;
     BOOL ret;
     DWORD n;
@@ -141,14 +159,19 @@ int _tmain(int argc, LPTSTR argv[]) {
     }
 
     do {
-      //  _tprintf(_T("[Cliente] Comando: "));
-       // _fgetts(response.mensagem, 256, stdin);
-       // response.mensagem[_tcslen(response.mensagem) - 1] = '\0';
+        _tprintf(_T("[Cliente] Comando: "));
+        _fgetts(response.mensagem, 256, stdin);
+        response.mensagem[_tcslen(response.mensagem) - 1] = '\0';
+
+        if (_tcscmp(response.mensagem, _T("listc")) == 0)
+            _tcscpy_s(aux, TAM, response.mensagem);
 
         userInterface(response.mensagem, &response, &isLoggedIn);
 
         ZeroMemory(&ov, sizeof(OVERLAPPED));
         ov.hEvent = hEvent;
+
+        _tprintf(_T("[Cliente] Vou enviar a mensagem '%s'... (WriteFile)\n"), response.mensagem);
 
         ret = WriteFile(hPipe, &response, sizeof(Response), &n, &ov);
         if (ret == TRUE) {
@@ -159,6 +182,12 @@ int _tmain(int argc, LPTSTR argv[]) {
                 _tprintf(_T("Agendei uma escrita\n"));
                 WaitForSingleObject(hEvent, INFINITE);
                 GetOverlappedResult(hPipe, &ov, &n, FALSE);
+
+                if (_tcscmp(aux, _T("listc")) == 0){
+
+
+                }
+
             }
             else {
                 _tprintf(_T("[ERRO] Escrita\n"));
