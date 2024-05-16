@@ -1,194 +1,181 @@
-#include "Utils.h"
+#include "Utils.h";
 
-BOOL isAuthenticated = FALSE;
+DWORD WINAPI recebeMSG(LPVOID data) {
+    HANDLE hPipe = (HANDLE)data;
+    Response response;
+    BOOL ret;
+    DWORD n;
+    OVERLAPPED ov;
+    HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL); // Evento para avisar que já leu...
 
-BOOL sendOperation(HANDLE hPipe, Response* response) {
-    DWORD bytesWritten;
-    OVERLAPPED ov = { 0 };
-    HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-    ov.hEvent = hEvent;
+    if (hEvent == NULL) {
+        _tprintf(_T("[ERRO] Falha ao criar evento\n"));
+        return 1;
+    }
 
-    _tprintf(_T("~Entrei aqui\n"));
+    do {
+        ZeroMemory(&ov, sizeof(OVERLAPPED));
+        ov.hEvent = hEvent;
 
-    BOOL success = WriteFile(hPipe, &response, sizeof(Response), &bytesWritten, &ov);
-    if (!success) {
-        if (GetLastError() == ERROR_IO_PENDING) {
+        ret = ReadFile(hPipe, &response, sizeof(Response), &n, &ov);
+        if (ret == TRUE) {
+            _tprintf(_T("Li de imediato...\n"));
+        }
+        else if (GetLastError() == ERROR_IO_PENDING) {
+            _tprintf(_T("Agendei uma leitura\n"));
             WaitForSingleObject(hEvent, INFINITE);
-
-            _tprintf(_T(" Escrevi NBytes -> %d\n"), bytesWritten);
-
-            //success = GetOverlappedResult(hPipe, &ov, &bytesWritten, FALSE);
-        }
-    }
-    CloseHandle(hEvent);
-    if (!success || bytesWritten == 0) {
-        _tprintf(_T("Erro ao enviar operação: %d\n"), GetLastError());
-        return FALSE;
-    }
-    return TRUE;
-}
-
-HANDLE connectToServer() {
-    HANDLE hPipe;
-    hPipe = CreateFile(
-        PIPE_NAME,
-        GENERIC_READ | GENERIC_WRITE,
-        0,
-        NULL,
-        OPEN_EXISTING,
-        FILE_FLAG_OVERLAPPED,
-        NULL);
-
-    if (hPipe == INVALID_HANDLE_VALUE) {
-        _tprintf(_T("Erro ao conectar ao pipe: %d\n"), GetLastError());
-        return NULL;
-    }
-    _tprintf(_T("Conectado ao servidor.\n"));
-    return hPipe;
-}
-
-BOOL authenticate(HANDLE hPipe, Response* response) {
-    TCHAR responseBuffer[256] = { 0 };
-    DWORD bytesRead = 0;
-    OVERLAPPED ov = { 0 };
-    HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-    ov.hEvent = hEvent;
-
-    if (!sendOperation(hPipe, response)) {
-        _tprintf(_T("Falha ao enviar comando de login.\n"));
-        CloseHandle(hEvent);
-        return FALSE;
-    }
-
-    BOOL readSuccess = ReadFile(hPipe, responseBuffer, sizeof(responseBuffer), &bytesRead, &ov);
-    if (!readSuccess && GetLastError() == ERROR_IO_PENDING) {
-        WaitForSingleObject(hEvent, INFINITE);
-        readSuccess = GetOverlappedResult(hPipe, &ov, &bytesRead, FALSE);
-    }
-    CloseHandle(hEvent);
-    if (!readSuccess || bytesRead == 0) {
-        _tprintf(_T("Falha ao receber resposta de login: %d\n"), GetLastError());
-        return FALSE;
-    }
-
-    _tprintf(_T("Resposta: %s\n"), responseBuffer);
-    return _tcscmp(responseBuffer, _T("Login bem-sucedido")) == 0;
-}
-
-DWORD WINAPI userInterfaceThread(LPVOID lpParam) {
-    HANDLE hPipe = (HANDLE)lpParam;
-    Response response = { 0 }; // Inicializa a estrutura a zeros
-    TCHAR responseBuffer[1024] = { 0 };
-    DWORD bytesRead = 0;
-
-    while (TRUE) {
-        if (!isAuthenticated) {
-            _tprintf(_T("Digite o comando 'login <username> <password>' para autenticar ou 'exit' para encerrar: "));
+            GetOverlappedResult(hPipe, &ov, &n, FALSE);
         }
         else {
-            _tprintf(_T("Digite um comando ('buy', 'sell', 'listc', 'balance', 'exit'): "));
+            _tprintf(_T("[ERRO] Leitura\n"));
+            return 1;
         }
 
-        _fgetts(response.operacao.msg, TAM, stdin);
-        response.operacao.msg[_tcslen(response.operacao.msg) - 1] = '\0';  // Remove o caractere de nova linha
+        _tprintf(_T("\n[Cliente] Recebi %d bytes: '%s'... (ReadFile)\n"), n, response.mensagem);
 
-        if (_tcscmp(response.operacao.msg, _T("exit")) == 0) break;
+    } while (_tcscmp(response.mensagem, _T("fim")));
 
-        if (_tcsncmp(response.operacao.msg, _T("login "), 6) == 0) {
-            if (authenticate(hPipe, &response)) {
-                isAuthenticated = TRUE;
-                _tprintf(_T("Autenticação bem-sucedida. Você agora pode executar outros comandos.\n"));
-                continue;
-            }
-            else {
-                _tprintf(_T("Falha na autenticação. Tente novamente.\n"));
-                continue;
-            }
-        }
-        else if (_tcsncmp(response.operacao.msg, _T("buy "), 4) == 0) {
-            response.operacao.isCompra = TRUE;
-            TCHAR* context = NULL;
-            TCHAR* token = _tcstok_s(response.operacao.msg, _T(" "), &context); // saltar "buy"
-            token = _tcstok_s(NULL, _T(" "), &context); // Nome da empresa
-            _tcscpy_s(response.operacao.nomeEmpresa, MAX_NOME, token);
-            token = _tcstok_s(NULL, _T(" "), &context); // Número de ações
-            response.operacao.quantidadeAcoes = _tstoi(token);
-
-            if (!sendOperation(hPipe, &response)) {
-                _tprintf(_T("Falha ao enviar comando 'buy'.\n"));
-                continue;
-            }
-        }
-        else if (_tcsncmp(response.operacao.msg, _T("sell "), 5) == 0) {
-            response.operacao.isCompra = FALSE;
-            TCHAR* context = NULL;
-            TCHAR* token = _tcstok_s(response.operacao.msg, _T(" "), &context); // saltar "sell"
-            token = _tcstok_s(NULL, _T(" "), &context); // Nome da empresa
-            _tcscpy_s(response.operacao.nomeEmpresa, MAX_NOME, token);
-            token = _tcstok_s(NULL, _T(" "), &context); // Número de ações
-            response.operacao.quantidadeAcoes = _tstoi(token);
-
-            if (!sendOperation(hPipe, &response)) {
-                _tprintf(_T("Falha ao enviar comando 'sell'.\n"));
-                continue;
-            }
-        }
-        else if (!isAuthenticated) {
-            _tprintf(_T("Por favor, autentique-se usando o comando 'login <username> <password>'.\n"));
-            continue;
-        }
-        else {
-            if (!sendOperation(hPipe, &response)) {
-                _tprintf(_T("Falha ao enviar comando: %d\n"), GetLastError());
-                continue;
-            }
-        }
-
-        OVERLAPPED ovRead = { 0 };
-        HANDLE hEventRead = CreateEvent(NULL, TRUE, FALSE, NULL);
-        ovRead.hEvent = hEventRead;
-
-        BOOL readSuccess = ReadFile(hPipe, responseBuffer, sizeof(responseBuffer), &bytesRead, &ovRead);
-        if (!readSuccess && GetLastError() == ERROR_IO_PENDING) {
-            WaitForSingleObject(hEventRead, INFINITE);
-            readSuccess = GetOverlappedResult(hPipe, &ovRead, &bytesRead, FALSE);
-        }
-        CloseHandle(hEventRead);
-        if (!readSuccess || bytesRead == 0) {
-            _tprintf(_T("Falha ao receber resposta: %d\n"), GetLastError());
-            continue;
-        }
-
-        _tprintf(_T("Resposta: %s\n"), responseBuffer);
-    }
-
+    CloseHandle(hEvent);
     return 0;
 }
 
-int _tmain(int argc, TCHAR* argv[]) {
-#ifdef UNICODE
+void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
+    TCHAR* token = _tcstok(command, _T(" "));
+
+    if (_tcscmp(token, _T("login")) == 0) {
+        TCHAR* username = _tcstok(NULL, _T(" "));
+        TCHAR* password = _tcstok(NULL, _T(" "));
+        if (username != NULL && password != NULL) {
+            _stprintf_s(response->mensagem, TAM, _T("login %s %s"), username, password);
+            *isLoggedIn = TRUE;
+        }
+        else {
+            _tprintf(_T("[ERRO] Uso: login <username> <password>\n"));
+        }
+    }
+    else if (!*isLoggedIn) {
+        _tprintf(_T("[ERRO] Você deve fazer login antes de executar outros comandos.\n"));
+        return;
+    }
+    else if (_tcscmp(token, _T("listc")) == 0) {
+        _stprintf_s(response->mensagem, TAM, _T("listc"));
+    }
+    else if (_tcscmp(token, _T("buy")) == 0) {
+        TCHAR* empresa = _tcstok(NULL, _T(" "));
+        TCHAR* quantidade = _tcstok(NULL, _T(" "));
+        if (empresa != NULL && quantidade != NULL) {
+            _stprintf_s(response->mensagem, TAM, _T("buy %s %s"), empresa, quantidade);
+        }
+        else {
+            _tprintf(_T("[ERRO] Uso: buy <nome-empresa> <numero-acoes>\n"));
+        }
+    }
+    else if (_tcscmp(token, _T("sell")) == 0) {
+        TCHAR* empresa = _tcstok(NULL, _T(" "));
+        TCHAR* quantidade = _tcstok(NULL, _T(" "));
+        if (empresa != NULL && quantidade != NULL) {
+            _stprintf_s(response->mensagem, TAM, _T("sell %s %s"), empresa, quantidade);
+        }
+        else {
+            _tprintf(_T("[ERRO] Uso: sell <nome-empresa> <numero-acoes>\n"));
+        }
+    }
+    else if (_tcscmp(token, _T("balance")) == 0) {
+        _stprintf_s(response->mensagem, TAM, _T("balance"));
+    }
+    else if (_tcscmp(token, _T("exit")) == 0) {
+        _stprintf_s(response->mensagem, TAM, _T("exit"));
+    }
+    else {
+        _tprintf(_T("[Cliente] Comando não reconhecido: %s\n"), command);
+    }
+}
+
+int _tmain(int argc, LPTSTR argv[]) {
+    Response response;
+    HANDLE hPipe, hThread;
+    BOOL ret;
+    DWORD n;
+    BOOL isLoggedIn = FALSE;
+
+#ifdef UNICODE 
     _setmode(_fileno(stdin), _O_WTEXT);
     _setmode(_fileno(stdout), _O_WTEXT);
     _setmode(_fileno(stderr), _O_WTEXT);
 #endif 
 
-    HANDLE hPipe = connectToServer();
-    if (hPipe == NULL) {
-        _tprintf(_T("Não foi possível conectar ao servidor.\n"));
-        return 1;
+    memset(&response, 0, sizeof(Response));
+
+    _tprintf(_T("[Cliente] Esperar pelo pipe '%s' (WaitNamedPipe)\n"), PIPE_NAME);
+
+    if (!WaitNamedPipe(PIPE_NAME, NMPWAIT_WAIT_FOREVER)) {
+        _tprintf(_T("[ERRO] Ligar ao pipe '%s'! (WaitNamedPipe)\n"), PIPE_NAME);
+        exit(-1);
     }
 
-    DWORD threadId;
-    HANDLE hThread = CreateThread(NULL, 0, userInterfaceThread, hPipe, 0, &threadId);
-    if (hThread == NULL) {
-        _tprintf(_T("Falha ao criar a thread de interface do usuário: %d\n"), GetLastError());
-        CloseHandle(hPipe);
-        return 1;
+    _tprintf(_T("[Cliente] Ligar ao pipe do escritor... (CreateFile)\n"));
+
+    hPipe = CreateFile(PIPE_NAME, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, NULL);
+    if (hPipe == INVALID_HANDLE_VALUE) {
+        _tprintf(_T("[ERRO] Ligar ao pipe '%s'! (CreateFile)\n"), PIPE_NAME);
+        exit(-1);
     }
+
+    _tprintf(_T("[Cliente] Liguei-me...\n"));
+
+    hThread = CreateThread(NULL, 0, recebeMSG, (LPVOID)hPipe, 0, NULL);
+    if (hThread == NULL) {
+        _tprintf(_T("[ERRO] Falha ao criar thread\n"));
+        CloseHandle(hPipe);
+        exit(-1);
+    }
+
+    OVERLAPPED ov;
+    HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    if (hEvent == NULL) {
+        _tprintf(_T("[ERRO] Falha ao criar evento\n"));
+        CloseHandle(hPipe);
+        CloseHandle(hThread);
+        exit(-1);
+    }
+
+    do {
+        _tprintf(_T("[Cliente] Comando: "));
+        _fgetts(response.mensagem, 256, stdin);
+        response.mensagem[_tcslen(response.mensagem) - 1] = '\0';
+
+        userInterface(response.mensagem, &response, &isLoggedIn);
+
+        ZeroMemory(&ov, sizeof(OVERLAPPED));
+        ov.hEvent = hEvent;
+
+        ret = WriteFile(hPipe, &response, sizeof(Response), &n, &ov);
+        if (ret == TRUE) {
+            _tprintf(_T("Escrevi...\n"));
+        }
+        else {
+            if (GetLastError() == ERROR_IO_PENDING) {
+                _tprintf(_T("Agendei uma escrita\n"));
+                WaitForSingleObject(hEvent, INFINITE);
+                GetOverlappedResult(hPipe, &ov, &n, FALSE);
+            }
+            else {
+                _tprintf(_T("[ERRO] Escrita\n"));
+                CloseHandle(hPipe);
+                CloseHandle(hThread);
+                CloseHandle(hEvent);
+                exit(-1);
+            }
+        }
+
+        _tprintf(_T("[Cliente] Enviei %d bytes ao leitor... (WriteFile)\n"), n);
+
+    } while (_tcscmp(response.mensagem, _T("exit")) != 0);
 
     WaitForSingleObject(hThread, INFINITE);
-
     CloseHandle(hThread);
     CloseHandle(hPipe);
+    CloseHandle(hEvent);
+
     return 0;
 }

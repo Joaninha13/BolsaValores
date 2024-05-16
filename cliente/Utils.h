@@ -17,15 +17,14 @@
 
 #define MAX_EMPRESAS 30
 #define MAX_NOME 50
-#define TAM 100
+#define TAM 256
 
 
 // Estrutura para operações de compra/venda
 typedef struct {
     BOOL isCompra; // TRUE para compra, FALSE para venda
-    TCHAR nomeEmpresa[MAX_NOME];
+    TCHAR nomeEmpresa[TAM];
     DWORD quantidadeAcoes;
-    TCHAR msg[TAM]; // Mensagem 
 } Operation;
 
 typedef struct {
@@ -33,14 +32,18 @@ typedef struct {
     DWORD numAcoes;
     DWORD valor;
 } ListCompany;
+// Estrutura para res
 
 // Estrutura para responder/mandar mensagens ao cliente
 typedef struct {
 
-    Operation operacao; // Operação atual (compra/venda)
-    ListCompany listCompany[MAX_EMPRESAS];
+    //User user; //Usuario a quem pertence a mensagem
+
     TCHAR mensagem[TAM]; // Mensagem de resposta da bolsa
     BOOL sucesso; // TRUE se a operação foi bem sucedida, FALSE caso contrário
+    Operation operacao; // Operação atual (compra/venda)
+    ListCompany listCompany[MAX_EMPRESAS];
+
     //HANDLE hPipe; // Handle do pipe para responder ao cliente
 
 } Response;
