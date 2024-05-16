@@ -143,7 +143,7 @@ int _tmain(int argc, LPTSTR argv[]) {
     do {
       //  _tprintf(_T("[Cliente] Comando: "));
        // _fgetts(response.mensagem, 256, stdin);
-        response.mensagem[_tcslen(response.mensagem) - 1] = '\0';
+       // response.mensagem[_tcslen(response.mensagem) - 1] = '\0';
 
         userInterface(response.mensagem, &response, &isLoggedIn);
 
