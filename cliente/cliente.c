@@ -40,6 +40,7 @@ DWORD WINAPI recebeMSG(LPVOID data) {
 }
 
 void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
+    _tprintf(_T("[Cliente] Comando: "));
     TCHAR* token = _tcstok(command, _T(" "));
 
     if (_tcscmp(token, _T("login")) == 0) {
@@ -140,8 +141,8 @@ int _tmain(int argc, LPTSTR argv[]) {
     }
 
     do {
-        _tprintf(_T("[Cliente] Comando: "));
-        _fgetts(response.mensagem, 256, stdin);
+      //  _tprintf(_T("[Cliente] Comando: "));
+       // _fgetts(response.mensagem, 256, stdin);
         response.mensagem[_tcslen(response.mensagem) - 1] = '\0';
 
         userInterface(response.mensagem, &response, &isLoggedIn);
