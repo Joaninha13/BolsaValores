@@ -22,7 +22,6 @@
 #define NCLIENTES			5
 #define TAM_COMAND			250
 #define TAM					256
-#define MAX					256
 #define MAX_USERS			20
 #define MAX_EMPRESAS		30
 #define MAX_ACOES_BOARD		10
@@ -85,6 +84,8 @@ typedef struct {
 	CompanyShares topAcoes[MAX_EMPRESAS];
 	ListCompany venda;
 	BOOL isCompra; // TRUE para compra, FALSE para venda
+
+	BOOL continua;
 
 } MemoryShare;
 

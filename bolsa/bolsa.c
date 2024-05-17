@@ -57,6 +57,7 @@ BOOL lerFicheiroCompanys(TCHAR* nomeArquivo, CompanyShares* comp) {
 	}
 
 	TCHAR linha[256]; // Buffer para armazenar a linha do arquivo
+
 	for (int j = 0; j < MAX_EMPRESAS; j++)
 		if (_tcscmp(comp[j].name, _T("")) != 0)
 			i = j;
@@ -74,6 +75,7 @@ BOOL lerFicheiroCompanys(TCHAR* nomeArquivo, CompanyShares* comp) {
 
 		if (token != NULL) {
 			_tcscpy_s(comp[i].name, sizeof(comp[i].name), token);
+			_tcscpy_s(comp[i].usersVenda[0].userName, TAM, _T(""));
 			token = _tcstok_s(NULL, _T(" "), &nextToken);
 		}
 
@@ -86,6 +88,9 @@ BOOL lerFicheiroCompanys(TCHAR* nomeArquivo, CompanyShares* comp) {
 			comp[i].valor = _tstof(token);
 		}
 
+		for (int j = 1; j < MAX_USERS; j++)
+			comp[i].numAcoes[j] = 0;
+
 		i++;
 	}
 
@@ -95,7 +100,7 @@ BOOL lerFicheiroCompanys(TCHAR* nomeArquivo, CompanyShares* comp) {
 	return TRUE;
 }
 
-BOOL escreveCli(HANDLE* hPipes, Response resp) {
+BOOL escreveCli(HANDLE* hPipes, Response *resp) {
 
 
 	DWORD nBytes;
@@ -106,11 +111,13 @@ BOOL escreveCli(HANDLE* hPipes, Response resp) {
 
 	ov.hEvent = hEvent;
 
+	_tprintf(_T("Entrei no EscreveCli e vou escrever para todos -> %s\n"), resp->mensagem);
+
 	for (int i = 0; i < NCLIENTES; i++) {
 
 		if (hPipes[i] != NULL) {
 
-			if (!WriteFile(hPipes[i], &resp, sizeof(Response), &nBytes, &ov)) {
+			if (!WriteFile(hPipes[i], resp, sizeof(Response), &nBytes, NULL)) {
 
 				if (GetLastError() == ERROR_IO_PENDING) {
 					_tprintf(_T("Escrita agendada no cliente %d com sucesso enviados %d\n"), i, nBytes);
@@ -144,6 +151,8 @@ BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 	int auxi = 0;
 	Response resp;
 
+	memset(&resp, 0, sizeof(Response));
+
 	TCHAR first[TAM_COMAND], secon[TAM_COMAND], third[TAM_COMAND], four[TAM_COMAND];
 	TCHAR* context = NULL;
 
@@ -167,7 +176,7 @@ BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 	}
 
 
-	//Done
+	//Done -> ver aqui com o stor para testar o board
 	if (_tcscmp(first, _T("addc")) == 0) {
 		//Acrescentar uma empresa
 
@@ -179,17 +188,40 @@ BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 				data->company[i].numAcoes[0] = _tstoi(third);
 				data->company[i].valor = _tstof(four);
 				_tcscpy_s(data->company[i].usersVenda[0].userName, TAM, _T(""));
+
+				for (DWORD j = 1; j < MAX_USERS; j++){
+					data->company[i].numAcoes[j] = 0;
+				}
+
 				_tprintf(_T("%s adicionada com sucesso\n"), data->company[i].name);
 				break;
 			}
 		}
 
-		CopyMemory(data->memory->topAcoes, &data->company, sizeof(CompanyShares));
+		CopyMemory(data->memory->topAcoes, &data->company, MAX_EMPRESAS * sizeof(CompanyShares));
 		SetEvent(data->hEvent);
-
 		ResetEvent(data->hEvent);
 
 		ReleaseMutex(data->hMutexData);
+
+		//WaitForSingleObject(data->hMutexData, INFINITE);
+
+		//for (DWORD i = 0; i < MAX_EMPRESAS; i++) {
+		//	if (_tcscmp(data->memory->topAcoes[i].name, _T("")) == 0) {
+		//		_tcscpy_s(data->memory->topAcoes[i].name, TAM, secon);
+		//		data->memory->topAcoes[i].numAcoes[0] = _tstoi(third);
+		//		data->memory->topAcoes[i].valor = _tstof(four);
+		//		_tcscpy_s(data->memory->topAcoes[i].usersVenda[0].userName, TAM, _T(""));
+		//		_tprintf(_T("%s adicionada com sucesso\n"), data->memory->topAcoes[i].name);
+		//		break;
+		//	}
+		//}
+
+		///*CopyMemory(data->memory->topAcoes, &data->company, MAX_EMPRESAS * sizeof(CompanyShares));*/
+		//SetEvent(data->hEvent);
+		//ResetEvent(data->hEvent);
+
+		//ReleaseMutex(data->hMutexData);
 		
 	}
 	//Done
@@ -223,8 +255,9 @@ BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 	else if (_tcscmp(first, _T("stock")) == 0){
 		//mudar o preço de uma ação
 
+		WaitForSingleObject(data->hMutexData, INFINITE);
+
 		for (DWORD i = 0; i < MAX_EMPRESAS; i++) {
-			WaitForSingleObject(data->hMutexData, INFINITE);
 
 			if (_tcscmp(data->company[i].name, secon) == 0) {
 				data->company[i].valor = _tstof(third);
@@ -232,9 +265,9 @@ BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 
 				// por um valor na resposta com o nome da empresa e o valor novo
 
-				_sntprintf_s(resp.mensagem, TAM, _T("O valor da ação da empresa %s foi alterado para %.2f\n"), data->company[i].name, data->company[i].valor);
+				_stprintf_s(&resp.mensagem, TAM, _T("O valor da ação da empresa %s foi alterado para %.2f\n"), data->company[i].name, data->company[i].valor);
 
-				if (escreveCli(data->hPipes, resp)){
+				if (escreveCli(data->hPipes, &resp)){
 					_tprintf(_T("Mensagem enviada com sucesso\n"));
 				}
 				else {
@@ -244,25 +277,30 @@ BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 				break;
 			}
 
-
-			CopyMemory(data->memory->topAcoes, &data->company, sizeof(CompanyShares));
-			SetEvent(data->hEvent);
-
-			ReleaseMutex(data->hMutexData);
 		}
+
+		CopyMemory(data->memory->topAcoes, &data->company, sizeof(CompanyShares));
+		SetEvent(data->hEvent);
+		ResetEvent(data->hEvent);
+
+
+		ReleaseMutex(data->hMutexData);
 	}
 	//Done
 	else if (_tcscmp(first, _T("users")) == 0) {
 		//Permite listar todos os utilizadores registados, mostrando o seu username, saldo atual e estado (ativo ou inativo).
 
+		WaitForSingleObject(data->hMutexData, INFINITE);
+
 		for (DWORD i = 0; i < MAX_USERS; i++) {
-			WaitForSingleObject(data->hMutexData, INFINITE);
 			if (_tcscmp(data->users[i].password, _T("")) != 0) {
 				_tprintf(_T("Utilizador %d: %s - Saldo : %.2f - Estado : %s\n"), i + 1, data->users[i].userName, data->users[i].saldo, data->users[i].ativo ? _T("Ativo") : _T("Inativo"));
 				ReleaseMutex(data->hMutexData);
 			}else
 				break;
 		}
+
+		ReleaseMutex(data->hMutexData);
 
 	}
 
@@ -275,14 +313,20 @@ BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 
 		_tcscpy_s(resp.mensagem, TAM, _T("close"));
 
-		escreveCli(data->hPipes, resp);
+		escreveCli(data->hPipes, &resp);
+
+		data->memory->continua = FALSE;
+
+		CopyMemory(data->memory->topAcoes, &data->company, sizeof(CompanyShares));
+		SetEvent(data->hEvent);
+		ResetEvent(data->hEvent);
+
+
 
 	}
 
-	else {
+	else
 		_tprintf(_T("Comando inválido\n"));
-
-	}
 
 	return TRUE;
 }
@@ -388,6 +432,8 @@ DWORD WINAPI trataCliente(LPVOID data) {
 	pdata->hPipe = pdata->bolsaData->hPipes[pdata->id];
 	ReleaseMutex(pdata->bolsaData->trinco);
 
+	memset(&wallet, 0, sizeof(Wallet));
+
 	do {
 
 		memset(&resp, 0, sizeof(Response));
@@ -480,22 +526,21 @@ DWORD WINAPI trataCliente(LPVOID data) {
 
 						ReleaseMutex(pdata->bolsaData->hMutexData);
 					}
-					
+				
 					else if (_tcscmp(pdata->resp.mensagem, _T("exit")) == 0) {
 						//logout
 						_tprintf(_T("exit\n"));
 
+						WaitForSingleObject(pdata->bolsaData->hMutexData, INFINITE);
+
 						_tcscpy_s(resp.mensagem, TAM_COMAND, _T("Logout com sucesso, BYE"));
 						pdata->continua = FALSE;
 
-						WaitForSingleObject(pdata->bolsaData->hMutexData, INFINITE);
 
-						for (int i = 0; i < MAX_USERS; i++){
-							if (pdata->bolsaData->users[i].hPipe == pdata->hPipe) {
+						for (int i = 0; i < MAX_USERS; i++)
+							if (pdata->bolsaData->users[i].hPipe == pdata->hPipe)
 								pdata->bolsaData->users[i].ativo = FALSE;
-							}
-							
-						}
+
 
 						ReleaseMutex(pdata->bolsaData->hMutexData);
 
@@ -505,48 +550,52 @@ DWORD WINAPI trataCliente(LPVOID data) {
 					else if (_tcscmp(pdata->resp.mensagem, _T("balance")) == 0) {
 						//saldo
 
+						WaitForSingleObject(pdata->bolsaData->trinco, INFINITE);
+
 						for (DWORD i = 0; i < MAX_USERS; i++) {
-							WaitForSingleObject(pdata->bolsaData->trinco, INFINITE);
 
 							if (pdata->hPipe == pdata->bolsaData->users[i].hPipe) {
 								resp.sucesso = TRUE;
 								_stprintf_s(resp.mensagem, TAM_COMAND, _T("Saldo: %.2f"), pdata->bolsaData->users[i].saldo);
 							}
-
-							ReleaseMutex(pdata->bolsaData->trinco);
 						
 						}
+
+						ReleaseMutex(pdata->bolsaData->trinco);
 
 					}
 					
 					else if (_tcscmp(pdata->resp.mensagem, _T("buy")) == 0) {
 						//compra
-						int auxNumAcoes = 0;
+						DWORD auxNumAcoes = 0;
 
 						WaitForSingleObject(pdata->bolsaData->hMutexData, INFINITE);
+
 						for (DWORD i = 0; i < MAX_EMPRESAS; i++) {
 							if (_tcscmp(pdata->bolsaData->company[i].name, _T("")) != 0)
 								_tprintf(_T("Empresa %d: %s - Valor por ação : %.2f - Número de ações : %d\n"), i + 1, pdata->bolsaData->company[i].name, pdata->bolsaData->company[i].valor, pdata->bolsaData->company[i].numAcoes[0]);
 						}
-						ReleaseMutex(pdata->bolsaData->hMutexData);
 
-						WaitForSingleObject(pdata->bolsaData->hMutexData, INFINITE);
-
+						//verificar se a empresa existe
 						for (int i = 0; i < MAX_EMPRESAS; i++) {
 							if (_tcscmp(pdata->bolsaData->company[i].name, pdata->resp.operacao.nomeEmpresa) == 0) {
 
-								for (int j = 0; j < MAX_USERS; j++){
-									if(pdata->bolsaData->company[i].numAcoes[j] != 0)
+								//ver quantas acoes tem a empresa
+								for (int j = 0; j < MAX_USERS; j++)
+									if (pdata->bolsaData->company[i].numAcoes[j] >= 0) {
+										_tprintf(_T("AuxNumAcoes -> %d\n"), auxNumAcoes);
+										_tprintf(_T("NumAcoes -> %d\n"), pdata->bolsaData->company[i].numAcoes[j]);
 										auxNumAcoes += pdata->bolsaData->company[i].numAcoes[j];
-								}
+									}
 
+								_tprintf(_T("A empresa %s tem %d acoes\n"), pdata->bolsaData->company[i].name, auxNumAcoes);
 
 								if (auxNumAcoes >= pdata->resp.operacao.quantidadeAcoes) {
 									for (int j = 0; j < MAX_USERS; j++) {
 										if (pdata->bolsaData->users[j].hPipe == pdata->hPipe) { // ver qual o user que esta a fazer a compra
 											if (pdata->bolsaData->users[j].saldo >= pdata->resp.operacao.quantidadeAcoes * pdata->bolsaData->company[i].valor) { // ver se tem saldo suficiente
 
-												int quantidadeAComprar = pdata->resp.operacao.quantidadeAcoes;
+												DWORD quantidadeAComprar = pdata->resp.operacao.quantidadeAcoes;
 
 												
 												for(int k = 0; k < MAX_USERS && quantidadeAComprar > 0; k++) {
@@ -567,9 +616,9 @@ DWORD WINAPI trataCliente(LPVOID data) {
 															if ( pdata->bolsaData->company[i].usersVenda[k].userName != NULL || _tcscmp(pdata->bolsaData->company[i].usersVenda[k].userName, _T("")) != 0) {
 																
 																for (int l = 0; l < MAX_ACOES_USER; l++) {
-																
 																	if (_tcscmp(pdata->bolsaData->users[l].userName, pdata->bolsaData->company[i].usersVenda[k].userName) == 0) {
 																		pdata->bolsaData->users[l].saldo += pdata->bolsaData->company[i].valor * quantidadeAComprar;
+																		break;
 																	}
 
 																}
@@ -579,21 +628,31 @@ DWORD WINAPI trataCliente(LPVOID data) {
 															pdata->bolsaData->memory->isCompra = TRUE;
 															pdata->bolsaData->memory->venda.numAcoes = quantidadeAComprar;
 															pdata->bolsaData->memory->venda.valor = pdata->bolsaData->company[i].valor;
-															SetEvent(pdata->bolsaData->hEvent);
+															//SetEvent(pdata->bolsaData->hEvent);
+															//ResetEvent(pdata->bolsaData->hEvent);
 
 															//Por na wallet do user
 															for (int l = 0; l < MAX_ACOES_USER; l++){
 
 																//se ja tiver a acao, entao so acrescentar
-																if (_tcscmp(wallet.acoes[l].name, pdata->bolsaData->company[j].name) == 0) {
+																if (_tcscmp(wallet.acoes[l].name, pdata->bolsaData->company[i].name) == 0) {
+																	_tprintf(_T("Acao ja existe na wallet vou acrescentar \n"));
 																	wallet.acoes[l].numAcoes += quantidadeAComprar;
+																	break;
 																}
 																//se nao tiver a acao, entao por na wallet
 																else if (wallet.acoes[l].name == NULL || _tcscmp(wallet.acoes[l].name, _T("")) == 0) {
-																	_tcscpy_s(wallet.acoes[l].name, TAM ,pdata->bolsaData->company[j].name);
+																	_tprintf(_T("Acao nao existe na wallet, vou por uma nova\n"));											
+																	_tcscpy_s(wallet.acoes[l].name, TAM ,pdata->bolsaData->company[i].name);
 																	wallet.acoes[l].numAcoes = quantidadeAComprar;
+																	break;
 																}
 
+															}
+															//Mostrar a wallet DEBUG
+															for (int l = 0; l < MAX_ACOES_USER; l++){
+																_tprintf(_T("Wallet:"));
+																_tprintf(_T("%d Acao : %s\n"),l ,wallet.acoes[l].name);
 															}
 
 															quantidadeAComprar = 0;
@@ -622,19 +681,20 @@ DWORD WINAPI trataCliente(LPVOID data) {
 																pdata->bolsaData->memory->isCompra = TRUE;
 																pdata->bolsaData->memory->venda.numAcoes = acoesDisponiveis;
 																pdata->bolsaData->memory->venda.valor = pdata->bolsaData->company[i].valor;
-																SetEvent(pdata->bolsaData->hEvent);
+																/*SetEvent(pdata->bolsaData->hEvent);
+																ResetEvent(pdata->bolsaData->hEvent);*/
 															}
 
 															//Por na wallet do user
 															for (int l = 0; l < MAX_ACOES_USER; l++) {
 
 																//se ja tiver a acao, entao so acrescentar
-																if (_tcscmp(wallet.acoes[l].name, pdata->bolsaData->company[j].name) == 0) {
+																if (_tcscmp(wallet.acoes[l].name, pdata->bolsaData->company[i].name) == 0) {
 																	wallet.acoes[l].numAcoes += acoesDisponiveis;
 																}
 																//se nao tiver a acao, entao por na wallet
 																else if (wallet.acoes[l].name == NULL || _tcscmp(wallet.acoes[l].name, _T("")) == 0) {
-																	_tcscpy_s(wallet.acoes[l].name, TAM, pdata->bolsaData->company[j].name);
+																	_tcscpy_s(wallet.acoes[l].name, TAM, pdata->bolsaData->company[i].name);
 																	wallet.acoes[l].numAcoes = acoesDisponiveis;
 																}
 
@@ -647,6 +707,7 @@ DWORD WINAPI trataCliente(LPVOID data) {
 													}
 												}
 
+												//retirar saldo na conta do user que esta a comprar
 												pdata->bolsaData->users[j].saldo -= pdata->resp.operacao.quantidadeAcoes * pdata->bolsaData->company[i].valor;
 
 												_tcscpy_s(resp.mensagem, TAM, _T("Compra efetuada com sucesso"));
@@ -656,6 +717,7 @@ DWORD WINAPI trataCliente(LPVOID data) {
 
 												CopyMemory(pdata->bolsaData->memory->topAcoes, &pdata->bolsaData->company, sizeof(CompanyShares));
 												SetEvent(pdata->bolsaData->hEvent);
+												ResetEvent(pdata->bolsaData->hEvent);
 
 											}
 											else {
@@ -927,7 +989,6 @@ int _tmain(int argc, TCHAR* argv[]) {
 #endif 
 
 	memset(&dataThreads, 0, sizeof(BolsaThreads));
-
 
 	if (argc != 2) {
 		_tprintf(_T("Usage: %s <file_name.txt>\n"), argv[0]);

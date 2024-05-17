@@ -58,7 +58,8 @@ DWORD WINAPI actualizaMostra(LPVOID dados) {
 	MemoryShare shared;
 
 	ZeroMemory(&shared, sizeof(MemoryShare));
-	ZeroMemory(td->shared, sizeof(MemoryShare));
+	ZeroMemory(&td->shared, sizeof(MemoryShare));
+
 
 	do {
 
@@ -86,7 +87,12 @@ DWORD WINAPI actualizaMostra(LPVOID dados) {
 		_tprintf_s(_T("Numero de Acções - %d\n"), shared.venda.numAcoes);
 		_tprintf_s(_T("Valor - %.2f\n"), shared.venda.valor);
 
-	} while (td->continua);
+		//for (int i = 0; i < td->numEmpresas; i++)
+		//	//if (_tcscmp(shared.topAcoes[i].name, _T("") != 0))
+		//	_tprintf_s(_T("%d. %s - Valor da ação: %.2f\n"), i + 1, td->shared->topAcoes[i].name, td->shared->topAcoes[i].valor);
+
+
+	} while (td->shared->continua || td->continua);
 
 
 	return 0;
@@ -112,6 +118,8 @@ int _tmain(int argc, TCHAR* argv[]) {
 		_tprintf(_T("Usage: %s <N_Empresas>\n"), argv[0]);
 		return 1;
 	}
+
+	ZeroMemory(&dataThread, sizeof(TData));
 
 	if (!InicializaAll(&dataThread))
 		exit(1);

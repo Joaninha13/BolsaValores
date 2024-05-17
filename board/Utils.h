@@ -45,8 +45,9 @@ typedef struct {
 	ListCompany venda;
 	BOOL isCompra; // TRUE para compra, FALSE para venda
 
-} MemoryShare;
+	BOOL continua;
 
+} MemoryShare;
 
 typedef struct {
 
