@@ -1,6 +1,4 @@
-#include <windows.h>
-#include <windowsx.h>
-#include <tchar.h>
+#include "Utils.h"
 
 #include "resource.h"
 
@@ -8,21 +6,6 @@ LRESULT CALLBACK TrataEventos(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK TrataDialog(HWND, UINT, WPARAM, LPARAM);
 
 TCHAR szProgName[] = TEXT("Base");
-
-#define MAX 1
-typedef struct {
-	TCHAR letra;
-	int x, y;
-} LETRA_POS;
-
-typedef struct {
-	HANDLE hMutex, hWnd;
-	RECT dim;			//limites da janela
-	INT stepX, stepY;	//velocidade (+/-)
-	POINT pos;			//posição da letra x y
-	TCHAR letra;
-	BOOL continua;
-} DATA;
 
 int WINAPI _tWinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPTSTR lpCmdLine, int nCmdShow) {
 
@@ -83,40 +66,6 @@ DWORD WINAPI moveLetra(LPVOID data) {
 
 	DATA* pData = (DATA*)data;
 
-	while (pData->continua) {
-		WaitForSingleObject(pData->hMutex, INFINITE);
-
-		if (pData->stepX != 0) {
-			pData->pos.x += pData->stepX;
-			if (pData->pos.x < 0) { //LIMITE ESQUERDO
-				pData->pos.x = 0;
-				pData->stepX *= -1;
-			}
-			else if (pData->pos.x > pData->dim.right - 10) { //LIMITE DIREITO
-				pData->pos.x = pData->dim.right - 10;
-				pData->stepX *= -1;
-			}
-
-		}
-
-		if (pData->stepY != 0) {
-			pData->pos.y += pData->stepY;
-			if (pData->pos.y < 0) { //LIMITE ESQUERDO
-				pData->pos.y = 0;
-				pData->stepY *= -1;
-			}
-			else if (pData->pos.y > pData->dim.bottom - 10) { //LIMITE DIREITO
-				pData->pos.y = pData->dim.bottom - 10;
-				pData->stepY *= -1;
-			}
-
-		}
-
-
-		ReleaseMutex(pData->hMutex);
-		InvalidateRect(pData->hWnd, NULL, TRUE);
-		Sleep(1000 / 30);
-	}
 
 
 
@@ -200,11 +149,6 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
 		pData->hMutex = CreateMutex(NULL, FALSE, NULL);
 		pData->hWnd = hWnd;
 		GetClientRect(hWnd, &pData->dim);		// DIMENSÃO ÁREA DE CLIENTE DA JANELA
-		pData->stepX = 2;						//30fps -> 30 * 2 = 60 pixels por segundo
-		pData->stepY = 3;
-		pData->pos.x = pData->dim.right / 2;
-		pData->pos.y = pData->dim.bottom / 2;
-		pData->letra = _T('O');
 		pData->continua = TRUE;
 
 		hThread = CreateThread(NULL, 0, moveLetra, (LPVOID)pData, 0, NULL);
@@ -217,7 +161,7 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
 		SetTextColor(hdc, RGB(0, 0, 0));
 		SetBkMode(hdc, TRANSPARENT);
 		//TextOut(hdc, pData->pos.x, pData->pos.y, &pData->letra, 1);
-		Rectangle(hdc, pData->pos.x, pData->pos.y, pData->pos.x + 10, pData->pos.y + 20);
+		//Rectangle(hdc, pData->pos.x, pData->pos.y, pData->pos.x + 10, pData->pos.y + 20);
 		EndPaint(hWnd, &ps);
 		break;
 
@@ -228,8 +172,9 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
 
 		case ID_FICHEIRO_INIT:
 			WaitForSingleObject(pData->hMutex, INFINITE);
-			pData->pos.x = pData->dim.right / 2;
-			pData->pos.y = pData->dim.bottom / 2;
+
+
+
 			ReleaseMutex(pData->hMutex);
 			break;
 
@@ -257,8 +202,8 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
 			//INVERTER MOVIMENTO
 			WaitForSingleObject(pData->hMutex, INFINITE);
 
-			pData->stepX *= -1;
-			pData->stepY *= -1;
+			/*pData->stepX *= -1;
+			pData->stepY *= -1;*/
 
 			ReleaseMutex(pData->hMutex);
 			break;
@@ -268,16 +213,16 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
 			WaitForSingleObject(pData->hMutex, INFINITE);
 
 
-			if (pData->stepX > 0)
-				pData->stepX++;
-			else
-				pData->stepX--;
+			//if (pData->stepX > 0)
+			//	pData->stepX++;
+			//else
+			//	pData->stepX--;
 
 
-			if (pData->stepY > 0)
-				pData->stepY++;
-			else
-				pData->stepY--;
+			//if (pData->stepY > 0)
+			//	pData->stepY++;
+			//else
+			//	pData->stepY--;
 
 			ReleaseMutex(pData->hMutex);
 			break;
@@ -287,15 +232,15 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
 			WaitForSingleObject(pData->hMutex, INFINITE);
 
 
-			if (pData->stepX > 0)
-				pData->stepX--;
-			else
-				pData->stepX++;
+			//if (pData->stepX > 0)
+			//	pData->stepX--;
+			//else
+			//	pData->stepX++;
 
-			if (pData->stepY > 0)
-				pData->stepY--;
-			else
-				pData->stepY++;
+			//if (pData->stepY > 0)
+			//	pData->stepY--;
+			//else
+			//	pData->stepY++;
 
 			ReleaseMutex(pData->hMutex);
 			break;
@@ -319,8 +264,7 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
 		WaitForSingleObject(pData->hMutex, INFINITE);
 
 		GetClientRect(hWnd, &pData->dim);		// DIMENSÃO ÁREA DE CLIENTE DA JANELA
-		pData->pos.x = pData->dim.right / 2;
-		pData->pos.y = pData->dim.bottom / 2;
+
 
 		ReleaseMutex(pData->hMutex);
 		break;

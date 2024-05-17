@@ -8,6 +8,7 @@
 #include <io.h>
 #include <string.h>
 
+
 #define REGISTRYPATH	_T("Software\\TPSO2\\Clientes")
 
 #define PIPE_NAME		_T("\\\\.\\pipe\\bolsa")
@@ -103,7 +104,8 @@ typedef struct {
 	User users[MAX_USERS];
 	CompanyShares company[MAX_EMPRESAS];
 
-	BOOL continua;
+	BOOL continua, stop;
+	DWORD nStop;
 
 	MemoryShare *memory;
 
