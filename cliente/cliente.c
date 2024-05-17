@@ -35,7 +35,7 @@ DWORD WINAPI recebeMSG(LPVOID data) {
             return 1;
         }
 
-        //verificação para ignorar mensagens vazias. Confirmar depois se funciona
+        // verificação para ignorar mensagens vazias. Confirmar depois se funciona
         if (n == 0 || _tcslen(response.mensagem) == 0) {
             continue;
         }
@@ -44,6 +44,16 @@ DWORD WINAPI recebeMSG(LPVOID data) {
 
         if (_tcscmp(response.mensagem, _T("close")) == 0) {
             running = FALSE;
+        }
+        else if (_tcscmp(response.mensagem, _T("listc")) == 0) {
+            _tprintf(_T("\n[Cliente] Informações da carteira:\n"));
+            for (int i = 0; i < MAX_EMPRESAS; i++) {
+                if (_tcslen(response.listCompany[i].name) > 0) {
+                    _tprintf(_T("Empresa: %s\n"), response.listCompany[i].name);
+                    _tprintf(_T("Número de Ações: %d\n"), response.listCompany[i].numAcoes);
+                    _tprintf(_T("Valor: %.2f\n"), response.listCompany[i].valor);
+                }
+            }
         }
 
     } while (running);
@@ -79,15 +89,6 @@ void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
     }
     else if (_tcscmp(token, _T("listc")) == 0) {
         _stprintf_s(response->mensagem, TAM, _T("listc"));
-
-        _tprintf(_T("\n[Cliente] Informações da carteira:\n"));
-        for (int i = 0; i < MAX_EMPRESAS; i++) {
-            if (_tcslen(response->listCompany[i].name) > 0) {
-                _tprintf(_T("Empresa: %s\n"), response->listCompany[i].name);
-                _tprintf(_T("Número de Ações: %d\n"), response->listCompany[i].numAcoes);
-                _tprintf(_T("Valor: %.2f\n"), response->listCompany[i].valor);
-            }
-        }
     }
     else if (_tcscmp(token, _T("buy")) == 0) {
         TCHAR* empresa = _tcstok_s(NULL, _T(" "), &context);
@@ -182,9 +183,6 @@ int _tmain(int argc, LPTSTR argv[]) {
         _fgetts(response.mensagem, 256, stdin);
         response.mensagem[_tcslen(response.mensagem) - 1] = '\0';
 
-        if (_tcscmp(response.mensagem, _T("listc")) == 0)
-            _tcscpy_s(aux, TAM, response.mensagem);
-
         userInterface(response.mensagem, &response, &isLoggedIn);
 
         ZeroMemory(&ov, sizeof(OVERLAPPED));
@@ -201,11 +199,6 @@ int _tmain(int argc, LPTSTR argv[]) {
                 _tprintf(_T("Agendei uma escrita\n"));
                 WaitForSingleObject(hEvent, INFINITE);
                 GetOverlappedResult(hPipe, &ov, &n, FALSE);
-
-                if (_tcscmp(aux, _T("listc")) == 0) {
-
-                }
-
             }
             else {
                 _tprintf(_T("[ERRO] Escrita\n"));
@@ -217,7 +210,6 @@ int _tmain(int argc, LPTSTR argv[]) {
         }
 
         _tprintf(_T("[Cliente] Enviei %d bytes ao leitor... (WriteFile)\n"), n);
-
     }
 
     WaitForSingleObject(hThread, INFINITE);
@@ -227,3 +219,4 @@ int _tmain(int argc, LPTSTR argv[]) {
 
     return 0;
 }
+
