@@ -72,6 +72,8 @@ DWORD WINAPI actualizaMostra(LPVOID dados) {
 
 		ReleaseMutex(td->hMutex);
 
+			_tprintf_s(_T("Continua Data shared -> %d\n"), shared.continua);
+
 		ordenarDecrescente(&shared, MAX_EMPRESAS);
 
 		for (DWORD i = 0; i < td->numEmpresas; i++)
@@ -88,12 +90,8 @@ DWORD WINAPI actualizaMostra(LPVOID dados) {
 		_tprintf_s(_T("Numero de Acções - %d\n"), shared.venda.numAcoes);
 		_tprintf_s(_T("Valor - %.2f\n"), shared.venda.valor);
 
-		//for (int i = 0; i < td->numEmpresas; i++)
-		//	//if (_tcscmp(shared.topAcoes[i].name, _T("") != 0))
-		//	_tprintf_s(_T("%d. %s - Valor da ação: %.2f\n"), i + 1, td->shared->topAcoes[i].name, td->shared->topAcoes[i].valor);
 
-
-	} while (td->shared->continua || td->continua);
+	} while (shared.continua && td->continua);
 
 
 	return 0;
@@ -128,17 +126,19 @@ int _tmain(int argc, TCHAR* argv[]) {
 
 	dataThread.numEmpresas = _tstoi(argv[1]);
 
+	_tprintf_s(_T("Continua Data shared -> %d\n"), dataThread.shared->continua);
+
 
 	hThread = CreateThread(NULL, 0, actualizaMostra, &dataThread, 0, NULL);
 
 
 	do{
 
-		_tprintf_s(_T("1 - Escreva 'leave' para sair!\n"));
+		_tprintf_s(_T("Escreva 'leave' para sair!\n"));
 		_fgetts(buffer, 100, stdin);
 		buffer[_tcslen(buffer) - 1] = '\0'; //Retirar o \n
 
-	} while (_tcscmp(buffer, _T("leave")) != 0 || dataThread.shared->continua);
+	} while (_tcscmp(buffer, _T("leave")) != 0 && dataThread.shared->continua);
 
 	dataThread.continua = FALSE;
 
