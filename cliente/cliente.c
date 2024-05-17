@@ -1,5 +1,7 @@
 #include "Utils.h";
 
+BOOL running = TRUE;
+
 DWORD WINAPI recebeMSG(LPVOID data) {
     HANDLE hPipe = (HANDLE)data;
     Response response;
@@ -35,13 +37,16 @@ DWORD WINAPI recebeMSG(LPVOID data) {
 
         _tprintf(_T("\n[Cliente] Recebi %d bytes: '%s'... (ReadFile)\n"), n, response.mensagem);
 
-    } while (_tcscmp(response.mensagem, _T("close")));
+        if (_tcscmp(response.mensagem, _T("close")) == 0) {
+            running = FALSE;
+        }
 
-
+    } while (running);
 
     CloseHandle(hEvent);
     return 0;
 }
+
 
 void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
     TCHAR* context = NULL;
@@ -100,6 +105,7 @@ void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
     }
     else if (_tcscmp(token, _T("exit")) == 0) {
         _stprintf_s(response->mensagem, TAM, _T("exit"));
+        running = FALSE;
     }
     else {
         _tprintf(_T("[Cliente] Comando não reconhecido: %s\n"), command);
@@ -156,7 +162,7 @@ int _tmain(int argc, LPTSTR argv[]) {
         exit(-1);
     }
 
-    do {
+    while (running) {
         _tprintf(_T("[Cliente] Comando: "));
         _fgetts(response.mensagem, 256, stdin);
         response.mensagem[_tcslen(response.mensagem) - 1] = '\0';
@@ -181,8 +187,7 @@ int _tmain(int argc, LPTSTR argv[]) {
                 WaitForSingleObject(hEvent, INFINITE);
                 GetOverlappedResult(hPipe, &ov, &n, FALSE);
 
-                if (_tcscmp(aux, _T("listc")) == 0){
-
+                if (_tcscmp(aux, _T("listc")) == 0) {
 
                 }
 
@@ -198,7 +203,7 @@ int _tmain(int argc, LPTSTR argv[]) {
 
         _tprintf(_T("[Cliente] Enviei %d bytes ao leitor... (WriteFile)\n"), n);
 
-    } while (_tcscmp(response.mensagem, _T("exit")) != 0);
+    }
 
     WaitForSingleObject(hThread, INFINITE);
     CloseHandle(hThread);
