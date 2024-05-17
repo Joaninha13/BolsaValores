@@ -1,5 +1,7 @@
 #include "Utils.h";
 
+BOOL running = TRUE;
+
 DWORD WINAPI recebeMSG(LPVOID data) {
     HANDLE hPipe = (HANDLE)data;
     Response response;
@@ -33,22 +35,44 @@ DWORD WINAPI recebeMSG(LPVOID data) {
             return 1;
         }
 
+        // verificação para ignorar mensagens vazias. Confirmar depois se funciona
+        if (n == 0 || _tcslen(response.mensagem) == 0) {
+            continue;
+        }
+
         _tprintf(_T("\n[Cliente] Recebi %d bytes: '%s'... (ReadFile)\n"), n, response.mensagem);
 
-    } while (_tcscmp(response.mensagem, _T("close")));
+        if (_tcscmp(response.mensagem, _T("close")) == 0) {
+            running = FALSE;
+        }
+        else if (_tcscmp(response.mensagem, _T("listc")) == 0) {
+            _tprintf(_T("\n[Cliente] Informações da carteira:\n"));
+            for (int i = 0; i < MAX_EMPRESAS; i++) {
+                if (_tcslen(response.listCompany[i].name) > 0) {
+                    _tprintf(_T("Empresa: %s\n"), response.listCompany[i].name);
+                    _tprintf(_T("Número de Ações: %d\n"), response.listCompany[i].numAcoes);
+                    _tprintf(_T("Valor: %.2f\n"), response.listCompany[i].valor);
+                }
+            }
+        }
 
-
+    } while (running);
 
     CloseHandle(hEvent);
     return 0;
 }
 
-void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
 
+
+void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
     TCHAR* context = NULL;
     TCHAR* token = _tcstok_s(command, _T(" "), &context);
 
     if (_tcscmp(token, _T("login")) == 0) {
+        if (*isLoggedIn) {
+            _tprintf(_T("[ERRO] Já está logado. Logout primeiro para fazer login novamente.\n"));
+            return;
+        }
         TCHAR* username = _tcstok_s(NULL, _T(" "), &context);
         TCHAR* password = _tcstok_s(NULL, _T(" "), &context);
         if (username != NULL && password != NULL) {
@@ -70,11 +94,9 @@ void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
         TCHAR* empresa = _tcstok_s(NULL, _T(" "), &context);
         TCHAR* quantidade = _tcstok_s(NULL, _T(" "), &context);
         if (empresa != NULL && quantidade != NULL) {
-
             response->operacao.isCompra = TRUE;
             _stprintf_s(response->operacao.nomeEmpresa, TAM, _T("%s"), empresa);
             response->operacao.quantidadeAcoes = _tstoi(quantidade);
-
             _stprintf_s(response->mensagem, TAM, _T("buy %s %s"), empresa, quantidade);
         }
         else {
@@ -85,13 +107,9 @@ void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
         TCHAR* empresa = _tcstok_s(NULL, _T(" "), &context);
         TCHAR* quantidade = _tcstok_s(NULL, _T(" "), &context);
         if (empresa != NULL && quantidade != NULL) {
-
-
             response->operacao.isCompra = FALSE;
             _stprintf_s(response->operacao.nomeEmpresa, TAM, _T("%s"), empresa);
             response->operacao.quantidadeAcoes = _tstoi(quantidade);
-
-
             _stprintf_s(response->mensagem, TAM, _T("sell %s %s"), empresa, quantidade);
         }
         else {
@@ -103,11 +121,13 @@ void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
     }
     else if (_tcscmp(token, _T("exit")) == 0) {
         _stprintf_s(response->mensagem, TAM, _T("exit"));
+        running = FALSE;
     }
     else {
         _tprintf(_T("[Cliente] Comando não reconhecido: %s\n"), command);
     }
 }
+
 
 int _tmain(int argc, LPTSTR argv[]) {
     Response response;
@@ -158,13 +178,10 @@ int _tmain(int argc, LPTSTR argv[]) {
         exit(-1);
     }
 
-    do {
+    while (running) {
         _tprintf(_T("[Cliente] Comando: "));
         _fgetts(response.mensagem, 256, stdin);
         response.mensagem[_tcslen(response.mensagem) - 1] = '\0';
-
-        if (_tcscmp(response.mensagem, _T("listc")) == 0)
-            _tcscpy_s(aux, TAM, response.mensagem);
 
         userInterface(response.mensagem, &response, &isLoggedIn);
 
@@ -182,12 +199,6 @@ int _tmain(int argc, LPTSTR argv[]) {
                 _tprintf(_T("Agendei uma escrita\n"));
                 WaitForSingleObject(hEvent, INFINITE);
                 GetOverlappedResult(hPipe, &ov, &n, FALSE);
-
-                if (_tcscmp(aux, _T("listc")) == 0){
-
-
-                }
-
             }
             else {
                 _tprintf(_T("[ERRO] Escrita\n"));
@@ -199,8 +210,7 @@ int _tmain(int argc, LPTSTR argv[]) {
         }
 
         _tprintf(_T("[Cliente] Enviei %d bytes ao leitor... (WriteFile)\n"), n);
-
-    } while (_tcscmp(response.mensagem, _T("exit")) != 0);
+    }
 
     WaitForSingleObject(hThread, INFINITE);
     CloseHandle(hThread);
@@ -209,3 +219,4 @@ int _tmain(int argc, LPTSTR argv[]) {
 
     return 0;
 }
+
