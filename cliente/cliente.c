@@ -1,7 +1,5 @@
 #include "Utils.h"
 
-BOOL running = TRUE;
-
 DWORD WINAPI recebeMSG(LPVOID data) {
     HANDLE hPipe = (HANDLE)data;
     Response response;
@@ -23,16 +21,14 @@ DWORD WINAPI recebeMSG(LPVOID data) {
 
         ret = ReadFile(hPipe, &response, sizeof(Response), &n, &ov);
         if (ret == TRUE) {
-            _tprintf(_T("Li de imediato...\n"));
         }
         else if (GetLastError() == ERROR_IO_PENDING) {
-            _tprintf(_T("Agendei uma leitura\n"));
             WaitForSingleObject(hEvent, INFINITE);
             GetOverlappedResult(hPipe, &ov, &n, FALSE);
         }
         else {
             _tprintf(_T("[ERRO] Leitura\n"));
-            CloseHandle(hEvent); 
+            CloseHandle(hEvent);
             return 1;
         }
 
@@ -44,20 +40,20 @@ DWORD WINAPI recebeMSG(LPVOID data) {
         _tprintf(_T("\n[Cliente] Recebi %d bytes: '%s'... (ReadFile)\n"), n, response.mensagem);
 
         if (_tcscmp(response.mensagem, _T("close")) == 0) {
-            running = FALSE;
+            break;
         }
         else if (_tcscmp(response.mensagem, _T("listc")) == 0) {
-            _tprintf(_T("\n[Cliente] Informações da carteira:\n"));
+            _tprintf(_T("\nLista de EMpresas:\n"));
             for (int i = 0; i < MAX_EMPRESAS; i++) {
                 if (_tcslen(response.listCompany[i].name) > 0) {
-                    _tprintf(_T("Empresa: %s\n"), response.listCompany[i].name);
-                    _tprintf(_T("Número de Ações: %d\n"), response.listCompany[i].numAcoes);
+                    _tprintf(_T("Empresa: %s -"), response.listCompany[i].name);
+                    _tprintf(_T("Número de Ações: %d -"), response.listCompany[i].numAcoes);
                     _tprintf(_T("Valor: %.2f\n"), response.listCompany[i].valor);
                 }
             }
         }
 
-    } while (running);
+    } while (TRUE);
 
     CloseHandle(hEvent);
     return 0;
@@ -81,6 +77,9 @@ void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
         else {
             _tprintf(_T("[ERRO] Uso: login <username> <password>\n"));
         }
+    }
+    else if (_tcscmp(token, _T("exit")) == 0) {
+        _stprintf_s(response->mensagem, TAM, _T("exit"));
     }
     else if (!*isLoggedIn) {
         _tprintf(_T("[ERRO] Você deve fazer login antes de executar outros comandos.\n"));
@@ -118,10 +117,6 @@ void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
     else if (_tcscmp(token, _T("balance")) == 0) {
         _stprintf_s(response->mensagem, TAM, _T("balance"));
     }
-    else if (_tcscmp(token, _T("exit")) == 0) {
-        _stprintf_s(response->mensagem, TAM, _T("exit"));
-        running = FALSE;
-    }
     else {
         _tprintf(_T("[Cliente] Comando não reconhecido: %s\n"), command);
     }
@@ -134,6 +129,7 @@ int _tmain(int argc, LPTSTR argv[]) {
     BOOL ret;
     DWORD n;
     BOOL isLoggedIn = FALSE;
+    BOOL keepRunning = TRUE;
 
 #ifdef UNICODE 
     _setmode(_fileno(stdin), _O_WTEXT);
@@ -158,7 +154,7 @@ int _tmain(int argc, LPTSTR argv[]) {
         exit(-1);
     }
 
-    _tprintf(_T("[Cliente] Liguei-me...\n"));
+    _tprintf(_T("[CONECTADO]\n"));
 
     hThread = CreateThread(NULL, 0, recebeMSG, (LPVOID)hPipe, 0, NULL);
     if (hThread == NULL) {
@@ -176,19 +172,15 @@ int _tmain(int argc, LPTSTR argv[]) {
         exit(-1);
     }
 
-    while (running) {
-        _tprintf(_T("[Cliente] Comando: "));
+    while (keepRunning) {
+        _tprintf(_T("Comando >"));
         _fgetts(response.mensagem, 256, stdin);
         response.mensagem[_tcslen(response.mensagem) - 1] = '\0';
 
-        if (!running) {
-            break;
-        }
-
         userInterface(response.mensagem, &response, &isLoggedIn);
 
-        if (!running) {
-            break;
+        if (_tcscmp(response.mensagem, _T("exit")) == 0) {
+            keepRunning = FALSE;
         }
 
         ZeroMemory(&ov, sizeof(OVERLAPPED));
