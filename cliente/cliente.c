@@ -44,11 +44,14 @@ DWORD WINAPI recebeMSG(LPVOID data) {
 }
 
 void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
-
     TCHAR* context = NULL;
     TCHAR* token = _tcstok_s(command, _T(" "), &context);
 
     if (_tcscmp(token, _T("login")) == 0) {
+        if (*isLoggedIn) {
+            _tprintf(_T("[ERRO] Já está logado. Logout primeiro para fazer login novamente.\n"));
+            return;
+        }
         TCHAR* username = _tcstok_s(NULL, _T(" "), &context);
         TCHAR* password = _tcstok_s(NULL, _T(" "), &context);
         if (username != NULL && password != NULL) {
@@ -70,11 +73,9 @@ void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
         TCHAR* empresa = _tcstok_s(NULL, _T(" "), &context);
         TCHAR* quantidade = _tcstok_s(NULL, _T(" "), &context);
         if (empresa != NULL && quantidade != NULL) {
-
             response->operacao.isCompra = TRUE;
             _stprintf_s(response->operacao.nomeEmpresa, TAM, _T("%s"), empresa);
             response->operacao.quantidadeAcoes = _tstoi(quantidade);
-
             _stprintf_s(response->mensagem, TAM, _T("buy %s %s"), empresa, quantidade);
         }
         else {
@@ -85,13 +86,9 @@ void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
         TCHAR* empresa = _tcstok_s(NULL, _T(" "), &context);
         TCHAR* quantidade = _tcstok_s(NULL, _T(" "), &context);
         if (empresa != NULL && quantidade != NULL) {
-
-
             response->operacao.isCompra = FALSE;
             _stprintf_s(response->operacao.nomeEmpresa, TAM, _T("%s"), empresa);
             response->operacao.quantidadeAcoes = _tstoi(quantidade);
-
-
             _stprintf_s(response->mensagem, TAM, _T("sell %s %s"), empresa, quantidade);
         }
         else {
@@ -108,6 +105,7 @@ void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
         _tprintf(_T("[Cliente] Comando não reconhecido: %s\n"), command);
     }
 }
+
 
 int _tmain(int argc, LPTSTR argv[]) {
     Response response;
