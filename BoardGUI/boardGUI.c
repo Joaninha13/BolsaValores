@@ -161,7 +161,9 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
 		SetTextColor(hdc, RGB(0, 0, 0));
 		SetBkMode(hdc, TRANSPARENT);
 		//TextOut(hdc, pData->pos.x, pData->pos.y, &pData->letra, 1);
-		//Rectangle(hdc, pData->pos.x, pData->pos.y, pData->pos.x + 10, pData->pos.y + 20);
+		/*for (int i = 0; i < 5; i++)
+			Rectangle(hdc, pData->pos.x, pData->pos.y, pData->pos.x + 10, pData->pos.y + 20);*/
+
 		EndPaint(hWnd, &ps);
 		break;
 
@@ -182,7 +184,7 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
 			DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_DIALOG1), hWnd, TrataDialog);
 			break;
 
-		case ID_FICHEIRO_SAIR:
+		case ID_FICHEIRO_EXIT:
 			DestroyWindow(hWnd);
 			break;
 

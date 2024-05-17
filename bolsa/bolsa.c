@@ -270,11 +270,20 @@ BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 	else if (_tcscmp(first, _T("listc")) == 0) {
 		//Lista todas as empresas existentes na bolsa, mostrando o seu nome, número de ações disponíveis (remanescentes), e preço atual das ações.
 
+		DWORD auxNumAcoes = 0;
+
 		WaitForSingleObject(data->hMutexData, INFINITE);
 
+
 		for (DWORD i = 0; i < MAX_EMPRESAS; i++){
+			for (int j = 0; j < MAX_USERS; j++)
+				if (data->company[i].numAcoes[j] >= 0)
+					auxNumAcoes += data->company[i].numAcoes[j];
+
 			if (_tcscmp(data->company[i].name, _T("")) != 0)
-				_tprintf(_T("Empresa %d: %s - Valor por ação : %.2f - Número de ações : %d\n"), i + 1, data->company[i].name, data->company[i].valor, data->company[i].numAcoes[0]);
+				_tprintf(_T("Empresa %d: %s - Valor por ação : %.2f - Número de ações : %d\n"), i + 1, data->company[i].name, data->company[i].valor, auxNumAcoes);
+
+			auxNumAcoes = 0;
 		}
 
 		ReleaseMutex(data->hMutexData);	
@@ -611,179 +620,204 @@ DWORD WINAPI trataCliente(LPVOID data) {
 					else if (_tcscmp(pdata->resp.mensagem, _T("buy")) == 0) {
 						//compra
 						DWORD auxNumAcoes = 0;
+						BOOL canBuy = TRUE;
 
 						WaitForSingleObject(pdata->bolsaData->hMutexData, INFINITE);
 
 						if (!pdata->bolsaData->stop){
 
-							for (DWORD i = 0; i < MAX_EMPRESAS; i++) {
-								if (_tcscmp(pdata->bolsaData->company[i].name, _T("")) != 0)
-									_tprintf(_T("Empresa %d: %s - Valor por ação : %.2f - Número de ações : %d\n"), i + 1, pdata->bolsaData->company[i].name, pdata->bolsaData->company[i].valor, pdata->bolsaData->company[i].numAcoes[0]);
+							//verificar se a minha wallet esta cheia e se tiver cheia e se nao tiver la a empresa que quero comprar, entao nao posso comprar
+							if (wallet.numEmpresas == 5){
+								for (DWORD i = 0; i < MAX_ACOES_BOARD; i++)
+									if (_tcscmp(wallet.acoes[i].name, pdata->resp.operacao.nomeEmpresa) != 0)
+										canBuy = FALSE;
+									else{
+										canBuy = TRUE;
+										break;
+									}
 							}
 
-							//verificar se a empresa existe
-							for (int i = 0; i < MAX_EMPRESAS; i++) {
-								if (_tcscmp(pdata->bolsaData->company[i].name, pdata->resp.operacao.nomeEmpresa) == 0) {
+							if (canBuy) {
 
-									//ver quantas acoes tem a empresa
-									for (int j = 0; j < MAX_USERS; j++)
-										if (pdata->bolsaData->company[i].numAcoes[j] >= 0) {
-											_tprintf(_T("AuxNumAcoes -> %d\n"), auxNumAcoes);
-											_tprintf(_T("NumAcoes -> %d\n"), pdata->bolsaData->company[i].numAcoes[j]);
-											auxNumAcoes += pdata->bolsaData->company[i].numAcoes[j];
-										}
+								//verificar se a empresa existe
+								for (int i = 0; i < MAX_EMPRESAS; i++) {
+									if (_tcscmp(pdata->bolsaData->company[i].name, pdata->resp.operacao.nomeEmpresa) == 0) {
 
-									_tprintf(_T("A empresa %s tem %d acoes\n"), pdata->bolsaData->company[i].name, auxNumAcoes);
+										//ver quantas acoes tem a empresa
+										for (int j = 0; j < MAX_USERS; j++)
+											if (pdata->bolsaData->company[i].numAcoes[j] >= 0) {
+												_tprintf(_T("AuxNumAcoes -> %d\n"), auxNumAcoes);
+												_tprintf(_T("NumAcoes -> %d\n"), pdata->bolsaData->company[i].numAcoes[j]);
+												auxNumAcoes += pdata->bolsaData->company[i].numAcoes[j];
+											}
 
-									if (auxNumAcoes >= pdata->resp.operacao.quantidadeAcoes) {
+										_tprintf(_T("A empresa %s tem %d acoes\n"), pdata->bolsaData->company[i].name, auxNumAcoes);
 
-										for (int j = 0; j < MAX_USERS; j++) {
-											if (pdata->bolsaData->users[j].hPipe == pdata->hPipe) { // ver qual o user que esta a fazer a compra
-												if (pdata->bolsaData->users[j].saldo >= pdata->resp.operacao.quantidadeAcoes * pdata->bolsaData->company[i].valor) { // ver se tem saldo suficiente
+										if (auxNumAcoes >= pdata->resp.operacao.quantidadeAcoes) {
 
-													DWORD quantidadeAComprar = pdata->resp.operacao.quantidadeAcoes;
+											for (int j = 0; j < MAX_USERS; j++) {
+												if (pdata->bolsaData->users[j].hPipe == pdata->hPipe) { // ver qual o user que esta a fazer a compra
+													if (pdata->bolsaData->users[j].saldo >= pdata->resp.operacao.quantidadeAcoes * pdata->bolsaData->company[i].valor) { // ver se tem saldo suficiente
 
-
-													WaitForSingleObject(pdata->bolsaData->hMutex, INFINITE);
-
-													pdata->bolsaData->memory->isCompra = TRUE;
-													pdata->bolsaData->memory->venda.numAcoes = quantidadeAComprar;
-													pdata->bolsaData->memory->venda.valor = pdata->bolsaData->company[i].valor * quantidadeAComprar;
-													_tcscpy_s(pdata->bolsaData->memory->venda.name, TAM, pdata->bolsaData->users[j].userName);
-
-													ReleaseMutex(pdata->bolsaData->hMutex);
-
-													for(int k = 0; k < MAX_USERS && quantidadeAComprar > 0; k++) {
-														if (pdata->bolsaData->company[i].numAcoes[k] > 0) {
-															DWORD acoesDisponiveis = pdata->bolsaData->company[i].numAcoes[k];
+														DWORD quantidadeAComprar = pdata->resp.operacao.quantidadeAcoes;
 
 
-															if (acoesDisponiveis >= quantidadeAComprar) {
+														WaitForSingleObject(pdata->bolsaData->hMutex, INFINITE);
 
-																//se o user que esta a vender for o mesmo que esta a comprar, entao nao fazer nada
-																if (_tcscmp(pdata->bolsaData->users[j].userName, pdata->bolsaData->company[i].usersVenda[k].userName) == 0)
-																	continue;
+														pdata->bolsaData->memory->isCompra = TRUE;
+														pdata->bolsaData->memory->venda.numAcoes = quantidadeAComprar;
+														pdata->bolsaData->memory->venda.valor = pdata->bolsaData->company[i].valor * quantidadeAComprar;
+														_tcscpy_s(pdata->bolsaData->memory->venda.name, TAM, pdata->bolsaData->users[j].userName);
 
-																pdata->bolsaData->company[i].numAcoes[k] -= quantidadeAComprar;
+														ReleaseMutex(pdata->bolsaData->hMutex);
 
-																//Por o saldo na conta do user que esta a vender
-																if ( pdata->bolsaData->company[i].usersVenda[k].userName != NULL || _tcscmp(pdata->bolsaData->company[i].usersVenda[k].userName, _T("")) != 0) {
+														for(int k = 0; k < MAX_USERS && quantidadeAComprar > 0; k++) {
+															if (pdata->bolsaData->company[i].numAcoes[k] > 0) {
+																DWORD acoesDisponiveis = pdata->bolsaData->company[i].numAcoes[k];
+
+
+																if (acoesDisponiveis >= quantidadeAComprar) {
+
+																	//se o user que esta a vender for o mesmo que esta a comprar, entao nao fazer nada
+																	if (_tcscmp(pdata->bolsaData->users[j].userName, pdata->bolsaData->company[i].usersVenda[k].userName) == 0)
+																		continue;
+
+																	pdata->bolsaData->company[i].numAcoes[k] -= quantidadeAComprar;
+
+																	//Por o saldo na conta do user que esta a vender
+																	if ( pdata->bolsaData->company[i].usersVenda[k].userName != NULL || _tcscmp(pdata->bolsaData->company[i].usersVenda[k].userName, _T("")) != 0) {
 																
+																		for (int l = 0; l < MAX_ACOES_USER; l++) {
+																			if (_tcscmp(pdata->bolsaData->users[l].userName, pdata->bolsaData->company[i].usersVenda[k].userName) == 0) {
+																				pdata->bolsaData->users[l].saldo += pdata->bolsaData->company[i].valor * quantidadeAComprar;
+																				break;
+																			}
+																		}
+																	}
+
+																	//Por na wallet do user
+																	for (int l = 0; l < MAX_ACOES_USER; l++){
+
+																		//se ja tiver a acao, entao so acrescentar
+																		if (_tcscmp(wallet.acoes[l].name, pdata->bolsaData->company[i].name) == 0) {
+																			_tprintf(_T("Acao ja existe na wallet vou acrescentar (quantidadeAComprar) %d \n"), quantidadeAComprar);
+																			wallet.acoes[l].numAcoes += quantidadeAComprar;
+																			break;
+																		}
+																		//se nao tiver a acao, entao por na wallet
+																		else if (wallet.acoes[l].name == NULL || _tcscmp(wallet.acoes[l].name, _T("")) == 0) {
+																			_tprintf(_T("Acao nao existe na wallet, vou por uma nova (quantidadeAComprar) %d\n"), quantidadeAComprar);											
+																			_tcscpy_s(wallet.acoes[l].name, TAM ,pdata->bolsaData->company[i].name);
+																			wallet.acoes[l].numAcoes = quantidadeAComprar;
+																			wallet.numEmpresas++;
+																			_tprintf(_T("NumEmpresas -> %d\n"), wallet.numEmpresas);
+																			break;
+																		}
+
+																	}
+																	//Mostrar a wallet DEBUG
+																	for (int l = 0; l < MAX_ACOES_USER; l++){
+																		_tprintf(_T("Wallet:"));
+																		_tprintf(_T("%d Acao : %s\n"),l ,wallet.acoes[l].name);
+																	}
+
+																	quantidadeAComprar = 0;
+																}
+																else {
+																	//pdata->bolsaData->company[i].numAcoes[k] = 0;
+
+																	//se o user que esta a vender for o mesmo que esta a comprar, entao nao fazer nada
+																	if (_tcscmp(pdata->bolsaData->users[j].userName, pdata->bolsaData->company[i].usersVenda[k].userName) == 0) {
+																		continue;
+																	}
+
+																	pdata->bolsaData->company[i].numAcoes[k] -= acoesDisponiveis;
+
+																	//Por o saldo na conta do user que esta a vender
+																	if (pdata->bolsaData->company[i].usersVenda[k].userName != NULL || _tcscmp(pdata->bolsaData->company[i].usersVenda[k].userName, _T("")) != 0) {
+
+																		for (int l = 0; l < MAX_ACOES_USER; l++) {
+
+																			if (_tcscmp(pdata->bolsaData->users[l].userName, pdata->bolsaData->company[i].usersVenda[k].userName) == 0) {
+																				pdata->bolsaData->users[l].saldo += pdata->bolsaData->company[i].valor * acoesDisponiveis;
+																				break;
+																			}
+
+																		}
+
+																	}
+
+																	//Por na wallet do user
 																	for (int l = 0; l < MAX_ACOES_USER; l++) {
-																		if (_tcscmp(pdata->bolsaData->users[l].userName, pdata->bolsaData->company[i].usersVenda[k].userName) == 0) {
-																			pdata->bolsaData->users[l].saldo += pdata->bolsaData->company[i].valor * quantidadeAComprar;
+
+																		//se ja tiver a acao, entao so acrescentar
+																		if (_tcscmp(wallet.acoes[l].name, pdata->bolsaData->company[i].name) == 0) {
+																			_tprintf(_T("Acao ja existe na wallet vou acrescentar (acoesDisponiveis) %d \n"), acoesDisponiveis);
+																			wallet.acoes[l].numAcoes += acoesDisponiveis;
+																			break;
+																		}
+																		//se nao tiver a acao, entao por na wallet
+																		else if (wallet.acoes[l].name == NULL || _tcscmp(wallet.acoes[l].name, _T("")) == 0) {
+																			_tprintf(_T("Acao nao existe na wallet, vou por uma nova (acoesDisponiveis) %d\n"), acoesDisponiveis);
+																			_tcscpy_s(wallet.acoes[l].name, TAM, pdata->bolsaData->company[i].name);
+																			wallet.acoes[l].numAcoes = acoesDisponiveis;
+																			wallet.numEmpresas++;
+																			_tprintf(_T("NumEmpresas -> %d\n"), wallet.numEmpresas);
 																			break;
 																		}
 
 																	}
 
+																	quantidadeAComprar -= acoesDisponiveis;
 																}
 
-																//Por na wallet do user
-																for (int l = 0; l < MAX_ACOES_USER; l++){
 
-																	//se ja tiver a acao, entao so acrescentar
-																	if (_tcscmp(wallet.acoes[l].name, pdata->bolsaData->company[i].name) == 0) {
-																		_tprintf(_T("Acao ja existe na wallet vou acrescentar \n"));
-																		wallet.acoes[l].numAcoes += quantidadeAComprar;
-																		break;
-																	}
-																	//se nao tiver a acao, entao por na wallet
-																	else if (wallet.acoes[l].name == NULL || _tcscmp(wallet.acoes[l].name, _T("")) == 0) {
-																		_tprintf(_T("Acao nao existe na wallet, vou por uma nova\n"));											
-																		_tcscpy_s(wallet.acoes[l].name, TAM ,pdata->bolsaData->company[i].name);
-																		wallet.acoes[l].numAcoes = quantidadeAComprar;
-																		break;
-																	}
-
-																}
-																//Mostrar a wallet DEBUG
-																for (int l = 0; l < MAX_ACOES_USER; l++){
-																	_tprintf(_T("Wallet:"));
-																	_tprintf(_T("%d Acao : %s\n"),l ,wallet.acoes[l].name);
-																}
-
-																quantidadeAComprar = 0;
 															}
-															else {
-																pdata->bolsaData->company[i].numAcoes[k] = 0;
-
-																//se o user que esta a vender for o mesmo que esta a comprar, entao nao fazer nada
-																if (_tcscmp(pdata->bolsaData->users[j].userName, pdata->bolsaData->company[i].usersVenda[k].userName) == 0) {
-																	continue;
-																}
-
-																pdata->bolsaData->company[i].numAcoes[k] -= acoesDisponiveis;
-
-																//Por o saldo na conta do user que esta a vender
-																if (pdata->bolsaData->company[i].usersVenda[k].userName != NULL || _tcscmp(pdata->bolsaData->company[i].usersVenda[k].userName, _T("")) != 0) {
-
-																	for (int l = 0; l < MAX_ACOES_USER; l++) {
-
-																		if (_tcscmp(pdata->bolsaData->users[l].userName, pdata->bolsaData->company[i].usersVenda[k].userName) == 0) {
-																			pdata->bolsaData->users[l].saldo += pdata->bolsaData->company[i].valor * acoesDisponiveis;
-																			break;
-																		}
-
-																	}
-
-																}
-
-																//Por na wallet do user
-																for (int l = 0; l < MAX_ACOES_USER; l++) {
-
-																	//se ja tiver a acao, entao so acrescentar
-																	if (_tcscmp(wallet.acoes[l].name, pdata->bolsaData->company[i].name) == 0) {
-																		wallet.acoes[l].numAcoes += acoesDisponiveis;
-																	}
-																	//se nao tiver a acao, entao por na wallet
-																	else if (wallet.acoes[l].name == NULL || _tcscmp(wallet.acoes[l].name, _T("")) == 0) {
-																		_tcscpy_s(wallet.acoes[l].name, TAM, pdata->bolsaData->company[i].name);
-																		wallet.acoes[l].numAcoes = acoesDisponiveis;
-																	}
-
-																}
-
-																quantidadeAComprar -= acoesDisponiveis;
-															}
-
-
 														}
+
+														//retirar saldo na conta do user que esta a comprar
+														pdata->bolsaData->users[j].saldo -= pdata->resp.operacao.quantidadeAcoes * pdata->bolsaData->company[i].valor;
+
+														_tcscpy_s(resp.mensagem, TAM, _T("Compra efetuada com sucesso"));
+														resp.sucesso = TRUE;
+
+														//por as coisas na memoria partilhada
+
+														WaitForSingleObject(pdata->bolsaData->hMutex, INFINITE);
+														CopyMemory(pdata->bolsaData->memory->topAcoes, &pdata->bolsaData->company, MAX_EMPRESAS * sizeof(CompanyShares));
+														ReleaseMutex(pdata->bolsaData->hMutex);
+
+														break;
+
 													}
-
-													//retirar saldo na conta do user que esta a comprar
-													pdata->bolsaData->users[j].saldo -= pdata->resp.operacao.quantidadeAcoes * pdata->bolsaData->company[i].valor;
-
-													_tcscpy_s(resp.mensagem, TAM, _T("Compra efetuada com sucesso"));
-													resp.sucesso = TRUE;
-
-													//por as coisas na memoria partilhada
-
-													WaitForSingleObject(pdata->bolsaData->hMutex, INFINITE);
-													CopyMemory(pdata->bolsaData->memory->topAcoes, &pdata->bolsaData->company, MAX_EMPRESAS * sizeof(CompanyShares));
-													ReleaseMutex(pdata->bolsaData->hMutex);
-
-													break;
-
-												}
-												else {
-													_tcscpy_s(resp.mensagem, TAM, _T("Saldo insuficiente"));
-													resp.sucesso = FALSE;
+													else {
+														_tcscpy_s(resp.mensagem, TAM, _T("Saldo insuficiente"));
+														resp.sucesso = FALSE;
+													}
 												}
 											}
 										}
+										else {
+											_stprintf_s(resp.mensagem, TAM, _T("Ações insuficientes, so ah %d"), auxNumAcoes);
+											resp.sucesso = FALSE;
+										}
+										break;
 									}
-									else {
-										_tcscpy_s(resp.mensagem, TAM, _T("Ações insuficientes, so ah %d"), auxNumAcoes);
+									else if(_tcscmp(pdata->bolsaData->company[i].name, pdata->resp.operacao.nomeEmpresa) != 0 && i == MAX_EMPRESAS - 1){
+										_tcscpy_s(resp.mensagem, TAM, _T("Empresa nao existe"));
 										resp.sucesso = FALSE;
 									}
-									break;
+
 								}
 
-							}
+								SetEvent(pdata->bolsaData->hEvent);
+								ResetEvent(pdata->bolsaData->hEvent);
 
-							SetEvent(pdata->bolsaData->hEvent);
-							ResetEvent(pdata->bolsaData->hEvent);
+							}
+							else {
+								_tcscpy_s(resp.mensagem, TAM, _T("Wallet cheia, nao pode comprar mais acoes de diferentes empresas"));
+								resp.sucesso = FALSE;
+							}
 
 						}
 						else{
@@ -823,6 +857,26 @@ DWORD WINAPI trataCliente(LPVOID data) {
 									if (wallet.acoes[l].numAcoes >= pdata->resp.operacao.quantidadeAcoes) {
 
 										wallet.acoes[l].numAcoes -= pdata->resp.operacao.quantidadeAcoes;
+
+										//se o user ficar sem acoes, entao retirar da wallet
+										if (wallet.acoes[l].numAcoes == 0) {
+											for (int s = 0; s < MAX_ACOES_USER; s++) {
+												if (wallet.acoes[s].name != NULL || _tcscmp(wallet.acoes[s].name, _T("")) != 0) {
+													_tcscpy_s(wallet.acoes[l].name, TAM, _T(""));
+													wallet.acoes[l].numAcoes = 0;
+													wallet.numEmpresas--;
+													break;
+												}
+											}
+										}
+
+										for (int s = 0; s < MAX_ACOES_USER; s++){
+											//MOSTRAR A WALLER
+											_tprintf(_T("Wallet do Username : %s\n"), username);
+											_tprintf(_T("%d Acao : Empresa %s "), s, wallet.acoes[s].name);
+											_tprintf(_T("NumAcoes : %d\n"), wallet.acoes[s].numAcoes);
+
+										}
 
 										for (int i = 0; i < MAX_EMPRESAS; i++) {
 
