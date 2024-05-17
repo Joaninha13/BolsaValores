@@ -146,7 +146,7 @@ int _tmain(int argc, LPTSTR argv[]) {
         exit(-1);
     }
 
-    _tprintf(_T("[Cliente] Ligar ao pipe do escritor... (CreateFile)\n"));
+   // _tprintf(_T("[Cliente] Ligar ao pipe do escritor... (CreateFile)\n"));
 
     hPipe = CreateFile(PIPE_NAME, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, NULL);
     if (hPipe == INVALID_HANDLE_VALUE) {
@@ -190,11 +190,10 @@ int _tmain(int argc, LPTSTR argv[]) {
 
         ret = WriteFile(hPipe, &response, sizeof(Response), &n, &ov);
         if (ret == TRUE) {
-            _tprintf(_T("Escrevi...\n"));
+          //  _tprintf(_T("Escrevi...\n"));
         }
         else {
             if (GetLastError() == ERROR_IO_PENDING) {
-                _tprintf(_T("Agendei uma escrita\n"));
                 WaitForSingleObject(hEvent, INFINITE);
                 GetOverlappedResult(hPipe, &ov, &n, FALSE);
             }
@@ -207,7 +206,7 @@ int _tmain(int argc, LPTSTR argv[]) {
             }
         }
 
-        _tprintf(_T("[Cliente] Enviei %d bytes ao leitor... (WriteFile)\n"), n);
+       // _tprintf(_T("[Cliente] Enviei %d bytes ao leitor... (WriteFile)\n"), n);
     }
 
     WaitForSingleObject(hThread, INFINITE);
