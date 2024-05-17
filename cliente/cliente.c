@@ -79,6 +79,15 @@ void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
     }
     else if (_tcscmp(token, _T("listc")) == 0) {
         _stprintf_s(response->mensagem, TAM, _T("listc"));
+
+        _tprintf(_T("\n[Cliente] Informações da carteira:\n"));
+        for (int i = 0; i < MAX_EMPRESAS; i++) {
+            if (_tcslen(response->listCompany[i].name) > 0) {
+                _tprintf(_T("Empresa: %s\n"), response->listCompany[i].name);
+                _tprintf(_T("Número de Ações: %d\n"), response->listCompany[i].numAcoes);
+                _tprintf(_T("Valor: %.2f\n"), response->listCompany[i].valor);
+            }
+        }
     }
     else if (_tcscmp(token, _T("buy")) == 0) {
         TCHAR* empresa = _tcstok_s(NULL, _T(" "), &context);
