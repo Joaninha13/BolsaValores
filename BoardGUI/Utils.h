@@ -5,12 +5,6 @@
 #include <windowsx.h>
 
 
-#define MAX 1
-typedef struct {
-	TCHAR letra;
-	int x, y;
-} LETRA_POS;
-
 typedef struct {
 	HANDLE hMutex, hWnd;
 	RECT dim;			//limites da janela
@@ -18,4 +12,12 @@ typedef struct {
 	POINT pos[MAX_ACOES_BOARD]; //posição da letra x y
 	TCHAR letra;
 	BOOL continua;
+
+	//limite superior e inferior e nclientes
+
+	//MemoryShare* shared;
+	//HANDLE hEvent, hMutex, hMap;
+	//BOOL continua;
+	//DWORD numEmpresas;
+
 } DATA;
