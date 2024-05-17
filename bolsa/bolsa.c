@@ -199,6 +199,12 @@ BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 		}
 
 		CopyMemory(data->memory->topAcoes, &data->company, MAX_EMPRESAS * sizeof(CompanyShares));
+
+		for (int i = 0; i < MAX_EMPRESAS; i++){
+			_tprintf(_T("Empresa %d: %s - Valor por ação : %.2f \n"), i + 1, data->memory->topAcoes[i].name, data->memory->topAcoes[i].valor);
+
+		}
+
 		SetEvent(data->hEvent);
 		ResetEvent(data->hEvent);
 
@@ -233,7 +239,16 @@ BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 			_tprintf(_T("Dados lidos com sucesso do ficheiro Empresas\n"));
 
 
-		CopyMemory(data->memory->topAcoes, &data->company, sizeof(CompanyShares));
+		//CopyMemory(data->memory->topAcoes, &data->company, sizeof(CompanyShares));
+
+		CopyMemory(data->memory->topAcoes, &data->company, MAX_EMPRESAS * sizeof(CompanyShares));
+
+		for (int i = 0; i < MAX_EMPRESAS; i++) {
+			_tprintf(_T("Empresa %d: %s - Valor por ação : %.2f \n"), i + 1, data->memory->topAcoes[i].name, data->memory->topAcoes[i].valor);
+
+		}
+
+		Sleep(10000);
 
 		SetEvent(data->hEvent);
 		ResetEvent(data->hEvent);

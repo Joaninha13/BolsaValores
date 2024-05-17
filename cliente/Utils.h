@@ -30,7 +30,7 @@ typedef struct {
 typedef struct {
     TCHAR name[TAM];
     DWORD numAcoes;
-    DWORD valor;
+    double valor;
 } ListCompany;
 // Estrutura para res
 

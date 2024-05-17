@@ -35,7 +35,8 @@ BOOL InicializaAll(TData* all) {
 void ordenarDecrescente(MemoryShare * s, int tamanho) {
 	int i, j, max_index;
 
-	DWORD temp;
+
+	CompanyShares temp;
 
 	for (i = 0; i < tamanho - 1; i++) {
 		max_index = i;
@@ -43,11 +44,12 @@ void ordenarDecrescente(MemoryShare * s, int tamanho) {
 		for (j = i + 1; j < tamanho; j++)
 			if (s->topAcoes[j].valor > s->topAcoes[max_index].valor)
 				max_index = j;
+		
 
 
-		temp = s->topAcoes[i].valor;
-		s->topAcoes[i].valor = s->topAcoes[max_index].valor;
-		s->topAcoes[max_index].valor = temp;
+		temp = s->topAcoes[i];
+		s->topAcoes[i] = s->topAcoes[max_index];
+		s->topAcoes[max_index] = temp;
 	}
 }
 
@@ -57,8 +59,7 @@ DWORD WINAPI actualizaMostra(LPVOID dados) {
 
 	MemoryShare shared;
 
-	ZeroMemory(&shared, sizeof(MemoryShare));
-	ZeroMemory(&td->shared, sizeof(MemoryShare));
+	ZeroMemory(&shared, sizeof(MemoryShare));;
 
 
 	do {
@@ -73,7 +74,7 @@ DWORD WINAPI actualizaMostra(LPVOID dados) {
 
 		ordenarDecrescente(&shared, MAX_EMPRESAS);
 
-		for (int i = 0; i < td->numEmpresas; i++)
+		for (DWORD i = 0; i < td->numEmpresas; i++)
 			//if (_tcscmp(shared.topAcoes[i].name, _T("") != 0))
 				_tprintf_s(_T("%d. %s - Valor da ação: %.2f\n"), i + 1, shared.topAcoes[i].name, shared.topAcoes[i].valor);
 
@@ -137,7 +138,7 @@ int _tmain(int argc, TCHAR* argv[]) {
 		_fgetts(buffer, 100, stdin);
 		buffer[_tcslen(buffer) - 1] = '\0'; //Retirar o \n
 
-	} while (_tcscmp(buffer, _T("leave")) != 0);
+	} while (_tcscmp(buffer, _T("leave")) != 0 || dataThread.shared->continua);
 
 	dataThread.continua = FALSE;
 

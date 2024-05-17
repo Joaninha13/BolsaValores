@@ -12,7 +12,7 @@
 #define EVENT_NAME			_T("SHARE_EVENT_BOARD")
 #define MUTEX_NAME			_T("MUTEX_DATA")
 
-#define TAM				100
+#define TAM				256
 #define MAX_USERS		20
 #define MAX_ACOES_BOARD 10
 #define MAX_EMPRESAS	30
@@ -20,10 +20,11 @@
 typedef struct {
 
 	TCHAR userName[TAM], password[TAM];
-	DWORD saldo;
+	float saldo;
+	BOOL ativo; //TRUE se o usuário está ativo, FALSE caso contrário
+	HANDLE hPipe; // Pipe do cliente
 
 } User;
-
 typedef struct {
 
 	TCHAR name[TAM];
