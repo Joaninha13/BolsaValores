@@ -1,4 +1,4 @@
-#include "Utils.h";
+#include "Utils.h"
 
 BOOL running = TRUE;
 
@@ -32,6 +32,7 @@ DWORD WINAPI recebeMSG(LPVOID data) {
         }
         else {
             _tprintf(_T("[ERRO] Leitura\n"));
+            CloseHandle(hEvent); 
             return 1;
         }
 
@@ -61,8 +62,6 @@ DWORD WINAPI recebeMSG(LPVOID data) {
     CloseHandle(hEvent);
     return 0;
 }
-
-
 
 void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
     TCHAR* context = NULL;
@@ -128,7 +127,6 @@ void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
     }
 }
 
-
 int _tmain(int argc, LPTSTR argv[]) {
     Response response;
     TCHAR aux[TAM];
@@ -183,7 +181,15 @@ int _tmain(int argc, LPTSTR argv[]) {
         _fgetts(response.mensagem, 256, stdin);
         response.mensagem[_tcslen(response.mensagem) - 1] = '\0';
 
+        if (!running) {
+            break;
+        }
+
         userInterface(response.mensagem, &response, &isLoggedIn);
+
+        if (!running) {
+            break;
+        }
 
         ZeroMemory(&ov, sizeof(OVERLAPPED));
         ov.hEvent = hEvent;
@@ -219,4 +225,3 @@ int _tmain(int argc, LPTSTR argv[]) {
 
     return 0;
 }
-
