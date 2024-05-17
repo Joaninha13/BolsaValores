@@ -35,6 +35,11 @@ DWORD WINAPI recebeMSG(LPVOID data) {
             return 1;
         }
 
+        //verificação para ignorar mensagens vazias. Confirmar depois se funciona
+        if (n == 0 || _tcslen(response.mensagem) == 0) {
+            continue;
+        }
+
         _tprintf(_T("\n[Cliente] Recebi %d bytes: '%s'... (ReadFile)\n"), n, response.mensagem);
 
         if (_tcscmp(response.mensagem, _T("close")) == 0) {
@@ -46,6 +51,7 @@ DWORD WINAPI recebeMSG(LPVOID data) {
     CloseHandle(hEvent);
     return 0;
 }
+
 
 
 void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
