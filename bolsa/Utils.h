@@ -7,6 +7,10 @@
 #include <fcntl.h> 
 #include <io.h>
 #include <string.h>
+#include <stdlib.h>
+#include <conio.h>
+#include <process.h>
+#include <time.h>
 
 
 #define REGISTRYPATH	_T("Software\\TPSO2\\Clientes")
@@ -43,6 +47,8 @@ typedef struct {
 	DWORD numAcoes[MAX_USERS]; // numAcoes[i] é o número de ações que o usuário i tem. 
 	double valor;
 	User usersVenda[MAX_USERS]; // usersVenda[i] é o usuário que está vendendo as ações numAcoes[i]. o i = 0 é o unico null
+
+	DWORD auxUp, auxDown; // Variáveis auxiliares para mudança de preços
 
 } CompanyShares;
 

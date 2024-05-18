@@ -462,6 +462,8 @@ BOOL InicializaAll(BolsaThreads* all) {
 	all->continua = TRUE;
 	all->stop = FALSE;
 	all->memory->continua = TRUE;
+	all->company->auxUp = 0;
+	all->company->auxDown = 0;
 	
 	return TRUE;
 }
@@ -781,6 +783,27 @@ DWORD WINAPI trataCliente(LPVOID data) {
 														_tcscpy_s(resp.mensagem, TAM, _T("Compra efetuada com sucesso"));
 														resp.sucesso = TRUE;
 
+														pdata->bolsaData->company[i].auxUp++;
+
+														//se o auxUp for 5, entao gerar um numero aleatorio e subir o valor da acao
+														if (pdata->bolsaData->company[i].auxUp == 5){
+															// Gera um número aleatório entre 0 e RAND_MAX
+															int randomInt = rand();
+
+															// Converte o número aleatório para um valor double entre 0.01 e 1.0
+															double randomDouble = 0.01 + (randomInt / (double)RAND_MAX) * (1.0 - 0.01);
+
+															_tprintf(_T("para subir valor randomDouble : %.2f\n"), randomDouble);
+
+															_tprintf(_T("Valor da acao da empresa %s antes %.2f\n"), pdata->bolsaData->company[i].name, pdata->bolsaData->company[i].valor);
+
+															pdata->bolsaData->company[i].valor += pdata->bolsaData->company[i].valor * randomDouble;
+
+															_tprintf(_T("Valor da acao da empresa %s alterado para %.2f\n"), pdata->bolsaData->company[i].name, pdata->bolsaData->company[i].valor);
+
+															pdata->bolsaData->company[i].auxUp = 0;
+														}
+
 														//por as coisas na memoria partilhada
 
 														WaitForSingleObject(pdata->bolsaData->hMutex, INFINITE);
@@ -912,6 +935,29 @@ DWORD WINAPI trataCliente(LPVOID data) {
 
 												_tcscpy_s(resp.mensagem, TAM, _T("Ações postas a Venda."));
 												resp.sucesso = TRUE;
+
+
+												pdata->bolsaData->company[i].auxDown++;
+
+												//se o auxUp for 5, entao gerar um numero aleatorio e subir o valor da acao
+
+												if (pdata->bolsaData->company[i].auxDown == 5) {
+													// Gera um número aleatório entre 0 e RAND_MAX
+													int randomInt = rand();
+
+													// Converte o número aleatório para um valor double entre 0.01 e 1.0
+													double randomDouble = 0.01 + (randomInt / (double)RAND_MAX) * (1.0 - 0.01);
+
+													_tprintf(_T("para descer valor randomDouble : %.2f\n"), randomDouble);
+
+													_tprintf(_T("Valor da acao da empresa %s antes %.2f\n"), pdata->bolsaData->company[i].name, pdata->bolsaData->company[i].valor);
+
+													pdata->bolsaData->company[i].valor -= pdata->bolsaData->company[i].valor * randomDouble;
+
+													_tprintf(_T("Valor da acao da empresa %s alterado para %.2f\n"), pdata->bolsaData->company[i].name, pdata->bolsaData->company[i].valor);
+
+													pdata->bolsaData->company[i].auxDown = 0;
+												}
 
 												break;
 											}
@@ -1116,6 +1162,8 @@ int _tmain(int argc, TCHAR* argv[]) {
 	_setmode(_fileno(stdout), _O_WTEXT);
 	_setmode(_fileno(stderr), _O_WTEXT);
 #endif 
+
+	srand((unsigned int)time(NULL));
 
 	memset(&dataThreads, 0, sizeof(BolsaThreads));
 
