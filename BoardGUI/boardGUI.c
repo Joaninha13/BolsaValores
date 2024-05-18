@@ -1,301 +1,242 @@
 #include "Utils.h"
-
 #include "resource.h"
 
 LRESULT CALLBACK TrataEventos(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK TrataDialog(HWND, UINT, WPARAM, LPARAM);
+INT_PTR CALLBACK AboutDialogProc(HWND, UINT, WPARAM, LPARAM);
 
-TCHAR szProgName[] = TEXT("Base");
+TCHAR szProgName[] = TEXT("BoardGUI");
 
 int WINAPI _tWinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPTSTR lpCmdLine, int nCmdShow) {
+    HWND hWnd;
+    MSG lpMsg;
+    WNDCLASSEX wcApp;
 
-	HWND hWnd;
-	MSG lpMsg;
-	WNDCLASSEX wcApp;
+    wcApp.cbSize = sizeof(WNDCLASSEX);
+    wcApp.hInstance = hInst;
+    wcApp.lpszClassName = szProgName;
+    wcApp.lpfnWndProc = TrataEventos;
+    wcApp.style = CS_HREDRAW | CS_VREDRAW;
+    wcApp.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+    wcApp.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
+    wcApp.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wcApp.lpszMenuName = MAKEINTRESOURCE(IDR_MENU1);
+    wcApp.cbClsExtra = 0;
+    wcApp.cbWndExtra = sizeof(DATA*);
+    wcApp.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
 
-	wcApp.cbSize = sizeof(WNDCLASSEX);
-	wcApp.hInstance = hInst;
-	wcApp.lpszClassName = szProgName;
-	wcApp.lpfnWndProc = TrataEventos;
-	wcApp.style = CS_HREDRAW | CS_VREDRAW;
-	//wcApp.hIcon = LoadIcon(NULL, IDI_APPLICATION);
-	//wcApp.hIconSm = LoadIcon(NULL, IDI_INFORMATION);
-	wcApp.hIcon = LoadIcon(NULL, IDI_EXCLAMATION);
-	wcApp.hIconSm = LoadIcon(NULL, IDI_SHIELD);
-	wcApp.hCursor = LoadCursor(NULL, IDC_ARROW);
-	wcApp.lpszMenuName = MAKEINTRESOURCE(IDR_MENU1);
-	wcApp.cbClsExtra = 0;
-	wcApp.cbWndExtra = sizeof(DATA*);
-	//wcApp.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
-	wcApp.hbrBackground = (HBRUSH)CreateSolidBrush(RGB(255, 255, 255));
+    if (!RegisterClassEx(&wcApp))
+        return 0;
 
-	if (!RegisterClassEx(&wcApp))
-		return(0);
+    hWnd = CreateWindow(
+        szProgName,
+        TEXT("BoardGUI"),
+        WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        800,
+        600,
+        HWND_DESKTOP,
+        NULL,
+        hInst,
+        NULL);
 
-	hWnd = CreateWindow(
-		szProgName,
-		//TEXT("Exemplo de Janela Principal em C"),
-		TEXT("Nova Janela em C"),
-		WS_OVERLAPPEDWINDOW,
-		//CW_USEDEFAULT,
-		50,
-		//CW_USEDEFAULT,
-		100,
-		//CW_USEDEFAULT,
-		800,
-		//CW_USEDEFAULT,
-		600,
-		(HWND)HWND_DESKTOP,
-		(HMENU)NULL,
-		(HINSTANCE)hInst,
-		0);
+    ShowWindow(hWnd, nCmdShow);
+    UpdateWindow(hWnd);
 
+    while (GetMessage(&lpMsg, NULL, 0, 0) > 0) {
+        TranslateMessage(&lpMsg);
+        DispatchMessage(&lpMsg);
+    }
 
-	ShowWindow(hWnd, nCmdShow);
-	UpdateWindow(hWnd);
+    return (int)lpMsg.wParam;
+}
 
-	while (GetMessage(&lpMsg, NULL, 0, 0) > 0) {
-		TranslateMessage(&lpMsg);
-		DispatchMessage(&lpMsg);
-	}
+void DrawBarGraph(HDC hdc, RECT rect, int* valores, int numEmpresas, int escalaMin, int escalaMax) {
+    int width = rect.right - rect.left;
+    int height = rect.bottom - rect.top;
+    int barWidth = width / numEmpresas;
 
-	return (int)lpMsg.wParam;
+    HBRUSH hBrushBackground = CreateSolidBrush(RGB(255, 255, 255));
+    FillRect(hdc, &rect, hBrushBackground);
+    DeleteObject(hBrushBackground);
+
+    for (int i = 0; i < numEmpresas; i++) {
+        int barHeight = (valores[i] - escalaMin) * height / (escalaMax - escalaMin);
+        RECT barRect = {
+            rect.left + i * barWidth,
+            rect.bottom - barHeight,
+            rect.left + (i + 1) * barWidth,
+            rect.bottom
+        };
+        FillRect(hdc, &barRect, (HBRUSH)(COLOR_WINDOW + 1));
+        FrameRect(hdc, &barRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+
+        TCHAR valorTexto[10];
+        _stprintf_s(valorTexto, 10, TEXT("%d"), valores[i]);
+        SetBkMode(hdc, TRANSPARENT);
+        TextOut(hdc, barRect.left + (barWidth / 4), barRect.top - 20, valorTexto, lstrlen(valorTexto));
+    }
 }
 
 DWORD WINAPI moveLetra(LPVOID data) {
+    DATA* pData = (DATA*)data;
+    while (pData->continua) {
+        WaitForSingleObject(pData->hMutex, INFINITE);
 
-	DATA* pData = (DATA*)data;
+        pData->pos[0].x += 1;
+        if (pData->pos[0].x > pData->dim.right) {
+            pData->pos[0].x = pData->dim.left;
+        }
 
-
-
-
-	return 0;
+        ReleaseMutex(pData->hMutex);
+        InvalidateRect(pData->hWnd, NULL, TRUE);
+        Sleep(50);
+    }
+    return 0;
 }
 
+INT_PTR CALLBACK TrataDialog(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
+    DATA* pData;
+    TCHAR str[10];
+    int scaleMin, scaleMax, numCompanies;
 
-INT_PTR CALLBACK TrataDialog(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam) {
+    switch (message) {
+    case WM_INITDIALOG:
+        pData = (DATA*)GetWindowLongPtr(GetParent(hDlg), 0);
+        if (pData != NULL) {
+            WaitForSingleObject(pData->hMutex, INFINITE);
+            _itot_s(pData->scaleMin, str, 10, 10);
+            SetDlgItemText(hDlg, IDC_EDIT1, str);
+            _itot_s(pData->scaleMax, str, 10, 10);
+            SetDlgItemText(hDlg, IDC_EDIT2, str);
+            _itot_s(pData->nCompanys, str, 10, 10);
+            SetDlgItemText(hDlg, IDC_EDIT3, str);
+            ReleaseMutex(pData->hMutex);
+        }
+        return (INT_PTR)TRUE;
 
-	DATA* pData;
-	TCHAR str[10] = _T("_");
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDOK) {
+            GetDlgItemText(hDlg, IDC_EDIT1, str, 10);
+            scaleMin = _ttoi(str);
+            GetDlgItemText(hDlg, IDC_EDIT2, str, 10);
+            scaleMax = _ttoi(str);
+            GetDlgItemText(hDlg, IDC_EDIT3, str, 10);
+            numCompanies = _ttoi(str);
 
-	switch (messg) {
+            pData = (DATA*)GetWindowLongPtr(GetParent(hDlg), 0);
+            if (pData != NULL) {
+                WaitForSingleObject(pData->hMutex, INFINITE);
+                pData->scaleMin = scaleMin;
+                pData->scaleMax = scaleMax;
+                pData->nCompanys = numCompanies;
+                ReleaseMutex(pData->hMutex);
+            }
 
-	case WM_INITDIALOG:
-		//INIT DATA.... (edit box, static box)
-		pData = (DATA*)GetWindowLongPtr(GetParent(hWnd), 0);
-		if (pData != NULL) {
-			WaitForSingleObject(pData->hMutex, INFINITE);
-			str[0] = pData->letra;
-			ReleaseMutex(pData->hMutex);
-		}
-		SetDlgItemText(hWnd, IDC_EDIT1, str);
-		return(INT_PTR)TRUE;
-
-		break;
-
-	case WM_COMMAND:
-
-		switch (wParam) {
-
-		case IDOK:
-			//LER INFO, ACTUALIZAR DADOS, ETC
-
-			GetDlgItemText(hWnd, IDC_EDIT1, str, 10);
-			SetDlgItemText(hWnd, IDC_STATIC2, str);
-
-			pData = (DATA*)GetWindowLongPtr(GetParent(hWnd), 0);
-			if (pData != NULL) {
-				WaitForSingleObject(pData->hMutex, INFINITE);
-				pData->letra = str[0];
-				ReleaseMutex(pData->hMutex);
-			}
-			EndDialog(hWnd, (INT_PTR)0);
-			break;
-
-
-		case IDCANCEL:
-			EndDialog(hWnd, (INT_PTR)0);
-			break;
-
-		}
-
-		return (INT_PTR)TRUE;
-
-		break;
-	}
-
-
-	return (INT_PTR)FALSE;
+            EndDialog(hDlg, IDOK);
+            return (INT_PTR)TRUE;
+        }
+        else if (LOWORD(wParam) == IDCANCEL) {
+            EndDialog(hDlg, IDCANCEL);
+            return (INT_PTR)TRUE;
+        }
+        break;
+    }
+    return (INT_PTR)FALSE;
 }
 
+INT_PTR CALLBACK AboutDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
+    switch (message) {
+    case WM_INITDIALOG:
+        return (INT_PTR)TRUE;
 
-LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam) {
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDOK) {
+            EndDialog(hDlg, IDOK);
+            return (INT_PTR)TRUE;
+        }
+        break;
+    }
+    return (INT_PTR)FALSE;
+}
 
-	int res;
-	HDC hdc;
-	PAINTSTRUCT ps;
-	TCHAR letra;
-	DATA* pData = (DATA*)GetWindowLongPtr(hWnd, 0);
-	static HANDLE hThread;
+LRESULT CALLBACK TrataEventos(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    int res;
+    HDC hdc;
+    PAINTSTRUCT ps;
+    DATA* pData = (DATA*)GetWindowLongPtr(hWnd, 0);
+    static HANDLE hThread;
 
-	switch (messg) {
-	case WM_CREATE:
+    switch (message) {
+    case WM_CREATE:
+        pData = (DATA*)malloc(sizeof(DATA));
+        SetWindowLongPtr(hWnd, 0, (LONG_PTR)pData);
 
-		pData = (DATA*)malloc(sizeof(DATA));
+        pData->hMutex = CreateMutex(NULL, FALSE, NULL);
+        pData->hWnd = hWnd;
+        GetClientRect(hWnd, &pData->dim);
+        pData->continua = TRUE;
+        pData->scaleMin = 0;
+        pData->scaleMax = 100;
+        pData->nCompanys = 10;
 
-		SetWindowLongPtr(hWnd, 0, (LONG_PTR)pData);
+        hThread = CreateThread(NULL, 0, moveLetra, (LPVOID)pData, 0, NULL);
+        break;
 
+    case WM_PAINT:
+        hdc = BeginPaint(hWnd, &ps);
+        GetClientRect(hWnd, &pData->dim);
+        SetTextColor(hdc, RGB(0, 0, 0));
+        SetBkMode(hdc, TRANSPARENT);
 
-		pData->hMutex = CreateMutex(NULL, FALSE, NULL);
-		pData->hWnd = hWnd;
-		GetClientRect(hWnd, &pData->dim);		// DIMENSÃO ÁREA DE CLIENTE DA JANELA
-		pData->continua = TRUE;
+        int valores[10] = { 30, 50, 80, 60, 70, 90, 40, 20, 50, 10 }; // Exemplos de valores das ações
+        DrawBarGraph(hdc, pData->dim, valores, pData->nCompanys, pData->scaleMin, pData->scaleMax);
 
-		hThread = CreateThread(NULL, 0, moveLetra, (LPVOID)pData, 0, NULL);
+        TextOut(hdc, 10, 10, TEXT("Empresa mais recente: "), 22);
+        //TextOut(hdc, 170, 10, pData->empresaRecente, lstrlen(pData->empresaRecente));
 
-		break;
+        EndPaint(hWnd, &ps);
+        break;
 
-	case WM_PAINT:
-		hdc = BeginPaint(hWnd, &ps);
-		GetClientRect(hWnd, &pData->dim);		// DIMENSÃO ÁREA DE CLIENTE DA JANELA
-		SetTextColor(hdc, RGB(0, 0, 0));
-		SetBkMode(hdc, TRANSPARENT);
-		//TextOut(hdc, pData->pos.x, pData->pos.y, &pData->letra, 1);
-		/*for (int i = 0; i < 5; i++)
-			Rectangle(hdc, pData->pos.x, pData->pos.y, pData->pos.x + 10, pData->pos.y + 20);*/
+    case WM_COMMAND:
+        switch (LOWORD(wParam)) {
+        case ID_FICHEIRO_CONFIG:
+            DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_DIALOG1), hWnd, TrataDialog);
+            InvalidateRect(hWnd, NULL, TRUE);
+            break;
 
-		EndPaint(hWnd, &ps);
-		break;
+        case ID_HELP_ABOUT:
+            DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_ABOUT), hWnd, AboutDialogProc);
+            break;
+        }
+        break;
 
+    case WM_SIZE:
+        WaitForSingleObject(pData->hMutex, INFINITE);
+        GetClientRect(hWnd, &pData->dim);
+        ReleaseMutex(pData->hMutex);
+        break;
 
-	case WM_COMMAND:
+    case WM_CLOSE:
+        res = MessageBox(hWnd, TEXT("Pretende mesmo sair?"), TEXT("Confirmação"), MB_ICONQUESTION | MB_YESNO | MB_TASKMODAL);
+        if (res == IDYES) {
+            pData->continua = FALSE;
+            DestroyWindow(hWnd);
+        }
+        break;
 
-		switch (wParam) {
+    case WM_DESTROY:
+        WaitForSingleObject(hThread, INFINITE);
+        CloseHandle(hThread);
+        CloseHandle(pData->hMutex);
+        free(pData);
+        PostQuitMessage(0);
+        break;
 
-		case ID_FICHEIRO_INIT:
-			WaitForSingleObject(pData->hMutex, INFINITE);
+    default:
+        return DefWindowProc(hWnd, message, wParam, lParam);
+    }
 
-
-
-			ReleaseMutex(pData->hMutex);
-			break;
-
-		case ID_FICHEIRO_CONFIG:
-			DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_DIALOG1), hWnd, TrataDialog);
-			break;
-
-		case ID_FICHEIRO_EXIT:
-			DestroyWindow(hWnd);
-			break;
-
-		default:
-			break;
-		}
-
-		break;
-
-
-	case WM_CHAR:
-		letra = LOWORD(wParam);
-
-		switch (letra) {
-
-		case VK_SPACE:
-			//INVERTER MOVIMENTO
-			WaitForSingleObject(pData->hMutex, INFINITE);
-
-			/*pData->stepX *= -1;
-			pData->stepY *= -1;*/
-
-			ReleaseMutex(pData->hMutex);
-			break;
-
-		case '+':
-			//aumenta velocidade
-			WaitForSingleObject(pData->hMutex, INFINITE);
-
-
-			//if (pData->stepX > 0)
-			//	pData->stepX++;
-			//else
-			//	pData->stepX--;
-
-
-			//if (pData->stepY > 0)
-			//	pData->stepY++;
-			//else
-			//	pData->stepY--;
-
-			ReleaseMutex(pData->hMutex);
-			break;
-
-		case '-':
-			//diminuir velocidade
-			WaitForSingleObject(pData->hMutex, INFINITE);
-
-
-			//if (pData->stepX > 0)
-			//	pData->stepX--;
-			//else
-			//	pData->stepX++;
-
-			//if (pData->stepY > 0)
-			//	pData->stepY--;
-			//else
-			//	pData->stepY++;
-
-			ReleaseMutex(pData->hMutex);
-			break;
-
-
-		default:
-			break;
-		}
-
-		if (wParam == VK_SPACE) {
-			//INVERTER MOVIMENTO
-			InvalidateRect(hWnd, NULL, TRUE);
-		}
-		else {
-			letra = wParam;
-		}
-		break;
-
-
-	case WM_SIZE:
-		WaitForSingleObject(pData->hMutex, INFINITE);
-
-		GetClientRect(hWnd, &pData->dim);		// DIMENSÃO ÁREA DE CLIENTE DA JANELA
-
-
-		ReleaseMutex(pData->hMutex);
-		break;
-
-	case WM_CLOSE:
-		res = MessageBox(
-			hWnd,
-			_T("Pretende mesmo sair?"),
-			_T("Confirmação"),
-			MB_ICONQUESTION | MB_YESNO | MB_TASKMODAL
-		);
-		if (res == IDYES) {
-			pData->continua = FALSE;
-			DestroyWindow(hWnd);
-		}
-		break;
-
-	case WM_DESTROY:
-		WaitForSingleObject(hThread, INFINITE);
-		CloseHandle(hThread);
-		CloseHandle(pData->hMutex);
-		free(pData);
-		PostQuitMessage(0);
-		break;
-
-	default:
-		return(DefWindowProc(hWnd, messg, wParam, lParam));
-		break;
-	}
-
-	return 0;
+    return 0;
 }
