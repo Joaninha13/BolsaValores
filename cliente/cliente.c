@@ -1,5 +1,7 @@
 #include "Utils.h"
 
+BOOL autenticado = FALSE;
+
 DWORD WINAPI recebeMSG(LPVOID data) {
     HANDLE hPipe = (HANDLE)data;
     Response response;
@@ -27,7 +29,7 @@ DWORD WINAPI recebeMSG(LPVOID data) {
             GetOverlappedResult(hPipe, &ov, &n, FALSE);
         }
         else {
-            _tprintf(_T("[ERRO] Leitura\n"));
+           // _tprintf(_T("[ERRO] Leitura\n"));
             CloseHandle(hEvent);
             return 1;
         }
@@ -36,19 +38,22 @@ DWORD WINAPI recebeMSG(LPVOID data) {
         if (n == 0 || _tcslen(response.mensagem) == 0) {
             continue;
         }
-
-        _tprintf(_T("\n[Cliente] Recebi %d bytes: '%s'... (ReadFile)\n"), n, response.mensagem);
+        if (autenticado == TRUE) {
+            _tprintf(_T("\n[%s]\n"), response.mensagem);
+        }
 
         if (_tcscmp(response.mensagem, _T("close")) == 0) {
             break;
         }
         else if (_tcscmp(response.mensagem, _T("listc")) == 0) {
-            _tprintf(_T("\nLista de EMpresas:\n"));
-            for (int i = 0; i < MAX_EMPRESAS; i++) {
-                if (_tcslen(response.listCompany[i].name) > 0) {
-                    _tprintf(_T("Empresa: %s -"), response.listCompany[i].name);
-                    _tprintf(_T("Número de Ações: %d -"), response.listCompany[i].numAcoes);
-                    _tprintf(_T("Valor: %.2f\n"), response.listCompany[i].valor);
+            if (autenticado == TRUE) {
+                _tprintf(_T("\nLista de Empresas:\n"));
+                for (int i = 0; i < MAX_EMPRESAS; i++) {
+                    if (_tcslen(response.listCompany[i].name) > 0) {
+                        _tprintf(_T("Empresa: %s, "), response.listCompany[i].name);
+                        _tprintf(_T("Número de Ações: %d, "), response.listCompany[i].numAcoes);
+                        _tprintf(_T("Valor: %.2f\n"), response.listCompany[i].valor);
+                    }
                 }
             }
         }
@@ -73,6 +78,7 @@ void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
         if (username != NULL && password != NULL) {
             _stprintf_s(response->mensagem, TAM, _T("login %s %s"), username, password);
             *isLoggedIn = TRUE;
+            autenticado = TRUE;
         }
         else {
             _tprintf(_T("[ERRO] Uso: login <username> <password>\n"));
@@ -139,7 +145,7 @@ int _tmain(int argc, LPTSTR argv[]) {
 
     memset(&response, 0, sizeof(Response));
 
-    _tprintf(_T("[Cliente] Esperar pelo pipe '%s' (WaitNamedPipe)\n"), PIPE_NAME);
+  //  _tprintf(_T("[Cliente] Esperar pelo pipe '%s' (WaitNamedPipe)\n"), PIPE_NAME);
 
     if (!WaitNamedPipe(PIPE_NAME, NMPWAIT_WAIT_FOREVER)) {
         _tprintf(_T("[ERRO] Ligar ao pipe '%s'! (WaitNamedPipe)\n"), PIPE_NAME);
@@ -186,7 +192,7 @@ int _tmain(int argc, LPTSTR argv[]) {
         ZeroMemory(&ov, sizeof(OVERLAPPED));
         ov.hEvent = hEvent;
 
-        _tprintf(_T("[Cliente] Vou enviar a mensagem '%s'... (WriteFile)\n"), response.mensagem);
+       // _tprintf(_T("[Cliente] Vou enviar a mensagem '%s'... (WriteFile)\n"), response.mensagem);
 
         ret = WriteFile(hPipe, &response, sizeof(Response), &n, &ov);
         if (ret == TRUE) {
