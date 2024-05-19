@@ -4,8 +4,6 @@
 
 #include <windowsx.h>
 
-#define MAX_ACOES_BOARD 10
-
 typedef struct {
     HANDLE hWnd,hEvent, hMutex, hMap;
 
@@ -14,8 +12,10 @@ typedef struct {
     int scaleMin, scaleMax;
     POINT pos[MAX_ACOES_BOARD];
 
-    MemoryShare* shared;    
-    BOOL continua;
+    MemoryShare* shared;
+    MemoryShare auxShared;
+
+    BOOL continua, teste;
 
 
 } DATA;

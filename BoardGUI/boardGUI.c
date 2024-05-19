@@ -81,21 +81,19 @@ BOOL InicializaAll(DATA* all) {
         return FALSE;
     }
 
-    all->nCompanys = 10;
-
     return TRUE;
 }
 
-void ordenarDecrescente(MemoryShare* s, int tamanho) {
+void ordenarDecrescente(MemoryShare* s) {
     int i, j, max_index;
 
 
     CompanyShares temp;
 
-    for (i = 0; i < tamanho - 1; i++) {
+    for (i = 0; i < MAX_EMPRESAS - 1; i++) {
         max_index = i;
 
-        for (j = i + 1; j < tamanho; j++)
+        for (j = i + 1; j < MAX_EMPRESAS; j++)
             if (s->topAcoes[j].valor > s->topAcoes[max_index].valor)
                 max_index = j;
 
@@ -111,10 +109,7 @@ DWORD WINAPI update(LPVOID dados) {
 
     DATA* td = (DATA*)dados;
 
-    MemoryShare shared;
-
-    ZeroMemory(&shared, sizeof(MemoryShare));;
-
+    ZeroMemory(&td->auxShared, sizeof(MemoryShare));
 
     do {
 
@@ -122,18 +117,18 @@ DWORD WINAPI update(LPVOID dados) {
 
         WaitForSingleObject(td->hMutex, INFINITE);
 
-        CopyMemory(&shared, td->shared, sizeof(MemoryShare));
+        CopyMemory(&td->auxShared, td->shared, sizeof(MemoryShare));
 
         ReleaseMutex(td->hMutex);
 
-        ordenarDecrescente(&shared, MAX_EMPRESAS);
+        ordenarDecrescente(&td->auxShared);
 
-        //for (DWORD i = 0; i < td->nCompanys; i++)
-        //    //if (_tcscmp(shared.topAcoes[i].name, _T("") != 0))
-        //    _tprintf_s(_T("%d. %s - Valor da ação: %.2f\n"), i + 1, shared.topAcoes[i].name, shared.topAcoes[i].valor);
+        InvalidateRect(td->hWnd, NULL, TRUE);
 
 
-    } while (shared.continua && td->continua);
+    } while (td->auxShared.continua && td->continua);
+
+    PostQuitMessage(0);
 
 
     return 0;
@@ -149,20 +144,36 @@ void DrawBarGraph(HDC hdc, DATA *pData) {
     DeleteObject(hBrushBackground);
 
     for (int i = 0; i < pData->nCompanys; i++) {
-        int barHeight = (pData->shared->topAcoes[i].valor - pData->scaleMin) * height / (pData->scaleMax - pData->scaleMin);
+        double barHeight = (pData->auxShared.topAcoes[i].valor - pData->scaleMin) * height / (pData->scaleMax - pData->scaleMin);
         RECT barRect = {
             pData->dim.left + i * barWidth,
-            pData->dim.bottom - barHeight,
+            pData->dim.bottom - (long)barHeight,
             pData->dim.left + (i + 1) * barWidth,
             pData->dim.bottom
         };
+
         FillRect(hdc, &barRect, (HBRUSH)(COLOR_WINDOW + 1));
         FrameRect(hdc, &barRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+        
+        TCHAR buffer[TAM], valorTexto[TAM];
 
-        TCHAR valorTexto[10];
-        _stprintf_s(valorTexto, 10, _T("%.2f"), pData->shared->topAcoes[i].valor);
+        _stprintf_s(valorTexto, TAM, _T("Val: %.2f"), pData->auxShared.topAcoes[i].valor);
         SetBkMode(hdc, TRANSPARENT);
-        TextOut(hdc, barRect.left + (barWidth / 4), barRect.top - 20, valorTexto, lstrlen(valorTexto));
+        TextOut(hdc, barRect.left + (barWidth / 8), barRect.top - 20, valorTexto, lstrlen(valorTexto));
+
+        
+        memset(&pData->auxShared.topAcoes[i].name, 0, TAM * sizeof(TCHAR));
+
+        //depois ver isso se tiver tempo amanha
+        if (_tcscmp(pData->auxShared.topAcoes[i].name, _T("")) == 0) {
+            _tcscpy_s(buffer, TAM, _T("-"));
+            TextOut(hdc, barRect.left + (barWidth / 6), barRect.top - 30, buffer, lstrlen(buffer));
+        }
+        else{
+            _stprintf_s(buffer, _T("Empresa - %s"), pData->auxShared.topAcoes[i].name);
+            TextOut(hdc, barRect.left + (barWidth / 6), barRect.top - 30, buffer, lstrlen(buffer));
+        }
+
     }
 }
 
@@ -243,10 +254,17 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 
     switch (message) {
     case WM_CREATE:
+
         pData = (DATA*)malloc(sizeof(DATA));
+        if (!pData){
+            return -1;
+        }
         SetWindowLongPtr(hWnd, 0, (LONG_PTR)pData);
 
-        if (!InicializaAll(&pData)) {
+
+        ZeroMemory(pData, sizeof(DATA));
+
+        if (!InicializaAll(pData)) {
 			free(pData);
 			PostQuitMessage(0);
 			return -1;
@@ -268,21 +286,25 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
         SetTextColor(hdc, RGB(0, 0, 0));
         SetBkMode(hdc, TRANSPARENT);
 
-        DrawBarGraph(hdc, &pData);
+        DrawBarGraph(hdc, pData);
 
-        TextOut(hdc, 10, 10, _T("Empresa mais recente: "), 22);
-        //TextOut(hdc, 170, 10, pData->empresaRecente, lstrlen(pData->empresaRecente));
+        if (_tcscmp(pData->shared->venda.name, _T("")) == 0) {
+            _tcscpy_s(buffer, TAM, _T("Sem movimentos"));
+            TextOut(hdc, 10, 20, buffer, _tcslen(buffer));
+        }
+        else{
+            if (pData->shared->isCompra)
+                TextOut(hdc, 10, 10, _T("Compra"), 6);
+            else
+                TextOut(hdc, 10, 10, _T("Posto a Venda"), 13);
 
-        if (pData->shared->isCompra)
-            TextOut(hdc, 10, 10, _T("Compra"),6);
-        else
-            TextOut(hdc, 10, 10, _T("Posto a Venda"), 13);
+            _stprintf_s(buffer, _T("Empresa - %s"), pData->shared->venda.name);
+            TextOut(hdc, 10, 30, buffer, _tcslen(buffer));
 
-        _stprintf_s(buffer, _T("Empresa - %s"), pData->shared->venda.name);
-        TextOut(hdc, 10, 10, buffer, _tcslen(buffer));
+            _stprintf_s(buffer, _T("Numero de Ações - %d"), pData->shared->venda.numAcoes);
+            TextOut(hdc, 10, 30, buffer, _tcslen(buffer));
+        }
 
-        _stprintf_s(buffer, _T("Numero de Ações - %d"), pData->shared->venda.numAcoes);
-        TextOut(hdc, 10, 30, buffer, _tcslen(buffer));
 
         //VER PORQUE ISTO DA ERRO POR SER DOUBLE?
         /*_stprintf_s(buffer, _T("Valor - %.2f"), pData->shared->venda.valor);
@@ -331,4 +353,5 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
     }
 
     return 0;
+
 }
