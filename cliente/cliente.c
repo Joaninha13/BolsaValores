@@ -68,6 +68,11 @@ void userInterface(TCHAR* command, Response* response, BOOL* isLoggedIn) {
     TCHAR* context = NULL;
     TCHAR* token = _tcstok_s(command, _T(" "), &context);
 
+    if (token == NULL) {
+        _tprintf(_T("[ERRO] Comando vazio.\n"));
+        return;
+    }
+
     if (_tcscmp(token, _T("login")) == 0) {
         if (*isLoggedIn) {
             _tprintf(_T("[ERRO] Já está logado. Logout primeiro para fazer login novamente.\n"));
@@ -145,14 +150,14 @@ int _tmain(int argc, LPTSTR argv[]) {
 
     memset(&response, 0, sizeof(Response));
 
-  //  _tprintf(_T("[Cliente] Esperar pelo pipe '%s' (WaitNamedPipe)\n"), PIPE_NAME);
+    //  _tprintf(_T("[Cliente] Esperar pelo pipe '%s' (WaitNamedPipe)\n"), PIPE_NAME);
 
     if (!WaitNamedPipe(PIPE_NAME, NMPWAIT_WAIT_FOREVER)) {
         _tprintf(_T("[ERRO] Ligar ao pipe '%s'! (WaitNamedPipe)\n"), PIPE_NAME);
         exit(-1);
     }
 
-   // _tprintf(_T("[Cliente] Ligar ao pipe do escritor... (CreateFile)\n"));
+    // _tprintf(_T("[Cliente] Ligar ao pipe do escritor... (CreateFile)\n"));
 
     hPipe = CreateFile(PIPE_NAME, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, NULL);
     if (hPipe == INVALID_HANDLE_VALUE) {
@@ -183,6 +188,11 @@ int _tmain(int argc, LPTSTR argv[]) {
         _fgetts(response.mensagem, 256, stdin);
         response.mensagem[_tcslen(response.mensagem) - 1] = '\0';
 
+        if (_tcslen(response.mensagem) == 0) {
+            _tprintf(_T("[ERRO] Mensagem vazia não pode ser enviada.\n"));
+            continue;
+        }
+
         userInterface(response.mensagem, &response, &isLoggedIn);
 
         if (_tcscmp(response.mensagem, _T("exit")) == 0) {
@@ -192,11 +202,11 @@ int _tmain(int argc, LPTSTR argv[]) {
         ZeroMemory(&ov, sizeof(OVERLAPPED));
         ov.hEvent = hEvent;
 
-       // _tprintf(_T("[Cliente] Vou enviar a mensagem '%s'... (WriteFile)\n"), response.mensagem);
+        // _tprintf(_T("[Cliente] Vou enviar a mensagem '%s'... (WriteFile)\n"), response.mensagem);
 
         ret = WriteFile(hPipe, &response, sizeof(Response), &n, &ov);
         if (ret == TRUE) {
-          //  _tprintf(_T("Escrevi...\n"));
+            //  _tprintf(_T("Escrevi...\n"));
         }
         else {
             if (GetLastError() == ERROR_IO_PENDING) {
@@ -212,7 +222,7 @@ int _tmain(int argc, LPTSTR argv[]) {
             }
         }
 
-       // _tprintf(_T("[Cliente] Enviei %d bytes ao leitor... (WriteFile)\n"), n);
+        // _tprintf(_T("[Cliente] Enviei %d bytes ao leitor... (WriteFile)\n"), n);
     }
 
     WaitForSingleObject(hThread, INFINITE);
