@@ -394,8 +394,6 @@ BOOL InicializaAll(BolsaThreads* all) {
 			_tprintf(_T("Error : RegQueryValueEx (%d)\n"), GetLastError());
 			return FALSE;
 		}
-
-		_tprintf(_T("NClientes = %d\n"), NClientes_Reg);
 	}
 	else {
 		if (RegCreateKeyEx(HKEY_CURRENT_USER, REGISTRYPATH, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) != ERROR_SUCCESS) {
@@ -453,8 +451,10 @@ DWORD WINAPI trataCliente(LPVOID data) {
 	PipeData* pdata = (PipeData*)data;
 	DWORD nBytes;
 	BOOL rSuccess, wSuccess;
-	Response resp;
+	Response resp, auxResp;
 	Wallet wallet;
+
+	memset(&auxResp, 0, sizeof(Response));
 
 	OVERLAPPED ov;
 	HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL); //Evento para avisar que ja leu....
@@ -477,7 +477,6 @@ DWORD WINAPI trataCliente(LPVOID data) {
 
 		if (!rSuccess) {
 			if (GetLastError() == ERROR_IO_PENDING) {
-				_tprintf(_T("Agendei uma leitura no cliente %d\n"), pdata->id);
 
 				WaitForSingleObject(hEvent, INFINITE);
 
@@ -551,10 +550,23 @@ DWORD WINAPI trataCliente(LPVOID data) {
 						pdata->continua = FALSE;
 
 
-						for (int i = 0; i < MAX_USERS; i++)
-							if (pdata->bolsaData->users[i].hPipe == pdata->hPipe)
-								pdata->bolsaData->users[i].ativo = FALSE;
+						WaitForSingleObject(pdata->bolsaData->trinco, INFINITE);
 
+						for (int i = 0; i < MAX_USERS; i++)
+							if (pdata->bolsaData->users[i].hPipe == pdata->hPipe) {
+								pdata->bolsaData->users[i].hPipe = NULL;
+								pdata->bolsaData->users[i].ativo = FALSE;
+								break;
+							}
+
+						for (int i = 0; i < NCLIENTES; i++)
+							if (pdata->bolsaData->hPipes[i] == pdata->hPipe){
+								pdata->bolsaData->hPipes[i] = NULL;
+								break;
+							}
+						ReleaseMutex(pdata->bolsaData->trinco);
+
+						ReleaseSemaphore(pdata->bolsaData->hSem, 1, NULL);
 
 						ReleaseMutex(pdata->bolsaData->hMutexData);
 
@@ -741,6 +753,11 @@ DWORD WINAPI trataCliente(LPVOID data) {
 															pdata->bolsaData->company[i].valor += pdata->bolsaData->company[i].valor * randomDouble;
 
 															pdata->bolsaData->company[i].auxUp = 0;
+
+															_stprintf_s(&auxResp.mensagem, TAM, _T("O valor da ação da empresa %s foi alterado para %.2f\n"), pdata->bolsaData->company[i].name, pdata->bolsaData->company[i].valor);
+
+															escreveCli(pdata->bolsaData->hPipes, &auxResp);
+
 														}
 
 														//por as coisas na memoria partilhada
@@ -884,6 +901,10 @@ DWORD WINAPI trataCliente(LPVOID data) {
 													pdata->bolsaData->company[i].valor -= pdata->bolsaData->company[i].valor * randomDouble;
 
 													pdata->bolsaData->company[i].auxDown = 0;
+
+													_stprintf_s(&auxResp.mensagem, TAM, _T("O valor da ação da empresa %s foi alterado para %.2f\n"), pdata->bolsaData->company[i].name, pdata->bolsaData->company[i].valor);
+
+													escreveCli(pdata->bolsaData->hPipes, &auxResp);
 												}
 
 												break;
@@ -980,9 +1001,6 @@ DWORD WINAPI trataCliente(LPVOID data) {
 	CloseHandle(pdata->bolsaData->hPipes[pdata->id]);
 	pdata->bolsaData->hPipes[pdata->id] = NULL;
 	ReleaseMutex(pdata->bolsaData->trinco);
-	
-	_tprintf(_T("Cliente %d saiu\n"), pdata->id);
-
 
 	return 0;
 
@@ -1085,7 +1103,7 @@ int _tmain(int argc, TCHAR* argv[]) {
 
 	//Buscar os users todos ao ficheiro.
 	if (!lerFicheiroUsers(argv[1], &dataThreads.users))
-		exit(1);
+		;//exit(1);
 
 	if (!InicializaAll(&dataThreads))
 		exit(1);
