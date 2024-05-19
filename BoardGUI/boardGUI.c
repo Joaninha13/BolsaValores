@@ -161,17 +161,14 @@ void DrawBarGraph(HDC hdc, DATA *pData) {
         SetBkMode(hdc, TRANSPARENT);
         TextOut(hdc, barRect.left + (barWidth / 8), barRect.top - 20, valorTexto, lstrlen(valorTexto));
 
-        
-        memset(&pData->auxShared.topAcoes[i].name, 0, TAM * sizeof(TCHAR));
 
         //depois ver isso se tiver tempo amanha
         if (_tcscmp(pData->auxShared.topAcoes[i].name, _T("")) == 0) {
             _tcscpy_s(buffer, TAM, _T("-"));
-            TextOut(hdc, barRect.left + (barWidth / 6), barRect.top - 30, buffer, lstrlen(buffer));
+            TextOut(hdc, barRect.left + (barWidth / 6), barRect.top - 40, buffer, lstrlen(buffer));
         }
         else{
-            _stprintf_s(buffer, _T("Empresa - %s"), pData->auxShared.topAcoes[i].name);
-            TextOut(hdc, barRect.left + (barWidth / 6), barRect.top - 30, buffer, lstrlen(buffer));
+            TextOut(hdc, barRect.left + (barWidth / 8), barRect.top - 40, pData->auxShared.topAcoes[i].name, lstrlen(pData->auxShared.topAcoes[i].name));
         }
 
     }
@@ -298,17 +295,17 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
             else
                 TextOut(hdc, 10, 10, _T("Posto a Venda"), 13);
 
-            _stprintf_s(buffer, _T("Empresa - %s"), pData->shared->venda.name);
+            _stprintf_s(buffer, TAM,_T("Empresa - %s"), pData->shared->venda.name);
             TextOut(hdc, 10, 30, buffer, _tcslen(buffer));
 
-            _stprintf_s(buffer, _T("Numero de Ações - %d"), pData->shared->venda.numAcoes);
-            TextOut(hdc, 10, 30, buffer, _tcslen(buffer));
+            _stprintf_s(buffer, TAM, _T("Numero de Ações - %d"), pData->shared->venda.numAcoes);
+            TextOut(hdc, 10, 50, buffer, _tcslen(buffer));
+
+            _stprintf_s(buffer, TAM, _T("Valor - %.2f"), pData->shared->venda.valor);
+            TextOut(hdc, 10, 70, buffer, _tcslen(buffer));
+
         }
 
-
-        //VER PORQUE ISTO DA ERRO POR SER DOUBLE?
-        /*_stprintf_s(buffer, _T("Valor - %.2f"), pData->shared->venda.valor);
-        TextOut(hdc, 10, 50, buffer, _tcslen(buffer));*/
 
         EndPaint(hWnd, &ps);
         break;
