@@ -35,7 +35,7 @@ BOOL lerFicheiroUsers(TCHAR* nomeArquivo, User* usuario) {
 		}
 
 		usuario[i].ativo = FALSE; // Inicializa o usuário como offline
-		usuario[i].hPipe = NULL; // Inicializa o número de ações como 0
+		usuario[i].hPipe = NULL; // Inicializa o pipe a NULL
 
 		i++;
 	}
@@ -99,19 +99,17 @@ BOOL lerFicheiroCompanys(TCHAR* nomeArquivo, CompanyShares* comp) {
 
 	return TRUE;
 }
-
+//DONE
 BOOL escreveCli(HANDLE* hPipes, Response *resp) {
 
 
 	DWORD nBytes;
 	OVERLAPPED ov;
-	HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL); //Evento para avisar que ja leu....
+	HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL); //Evento para avisar que ja escreveu
 
 	ZeroMemory(&ov, sizeof(OVERLAPPED));
 
 	ov.hEvent = hEvent;
-
-	_tprintf(_T("Entrei no EscreveCli e vou escrever para todos -> %s\n"), resp->mensagem);
 
 	for (int i = 0; i < NCLIENTES; i++) {
 
@@ -120,7 +118,6 @@ BOOL escreveCli(HANDLE* hPipes, Response *resp) {
 			if (!WriteFile(hPipes[i], resp, sizeof(Response), &nBytes, NULL)) {
 
 				if (GetLastError() == ERROR_IO_PENDING) {
-					_tprintf(_T("Escrita agendada no cliente %d com sucesso enviados %d\n"), i, nBytes);
 
 					WaitForSingleObject(hEvent, INFINITE);
 
@@ -146,7 +143,7 @@ BOOL escreveCli(HANDLE* hPipes, Response *resp) {
 	return TRUE;
 }
 
-
+//DONE
 DWORD WINAPI stop(LPVOID data) {
 
 	BolsaThreads* all = (BolsaThreads*)data;
@@ -230,12 +227,6 @@ BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 		CopyMemory(data->memory->topAcoes, &data->company, MAX_EMPRESAS * sizeof(CompanyShares));
 		ReleaseMutex(data->hMutex);
 
-		for (int i = 0; i < MAX_EMPRESAS; i++){
-			if (_tcscmp(data->memory->topAcoes[i].name, _T("")) != 0)
-				_tprintf(_T("Empresa %d: %s - Valor por ação : %.2f \n"), i + 1, data->memory->topAcoes[i].name, data->memory->topAcoes[i].valor);
-
-		}
-
 		SetEvent(data->hEvent);
 		ResetEvent(data->hEvent);
 
@@ -254,12 +245,6 @@ BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 		WaitForSingleObject(data->hMutex, INFINITE);
 		CopyMemory(data->memory->topAcoes, &data->company, MAX_EMPRESAS * sizeof(CompanyShares));
 		ReleaseMutex(data->hMutex);
-
-		for (int i = 0; i < MAX_EMPRESAS; i++) {
-			if (_tcscmp(data->memory->topAcoes[i].name, _T("")) != 0)
-				_tprintf(_T("Empresa %d: %s - Valor por ação : %.2f \n"), i + 1, data->memory->topAcoes[i].name, data->memory->topAcoes[i].valor);
-
-		}
 
 		SetEvent(data->hEvent);
 		ResetEvent(data->hEvent);
@@ -304,12 +289,7 @@ BOOL leComand(TCHAR comand[TAM_COMAND], BolsaThreads* data) {
 
 				_stprintf_s(&resp.mensagem, TAM, _T("O valor da ação da empresa %s foi alterado para %.2f\n"), data->company[i].name, data->company[i].valor);
 
-				if (escreveCli(data->hPipes, &resp)){
-					_tprintf(_T("Mensagem enviada com sucesso\n"));
-				}
-				else {
-					_tprintf(_T("Erro ao enviar mensagem\n"));
-				}
+				escreveCli(data->hPipes, &resp);
 
 				break;
 			}
@@ -669,7 +649,7 @@ DWORD WINAPI trataCliente(LPVOID data) {
 														pdata->bolsaData->memory->isCompra = TRUE;
 														pdata->bolsaData->memory->venda.numAcoes = quantidadeAComprar;
 														pdata->bolsaData->memory->venda.valor = pdata->bolsaData->company[i].valor * quantidadeAComprar;
-														_tcscpy_s(pdata->bolsaData->memory->venda.name, TAM, pdata->bolsaData->users[j].userName);
+														_tcscpy_s(pdata->bolsaData->memory->venda.name, TAM, pdata->bolsaData->company[i].name);
 
 														ReleaseMutex(pdata->bolsaData->hMutex);
 
@@ -930,6 +910,7 @@ DWORD WINAPI trataCliente(LPVOID data) {
 												pdata->bolsaData->memory->isCompra = FALSE;
 												pdata->bolsaData->memory->venda.numAcoes = pdata->resp.operacao.quantidadeAcoes;
 												pdata->bolsaData->memory->venda.valor = pdata->bolsaData->company[i].valor;
+												_tcscpy_s(pdata->bolsaData->memory->venda.name, TAM, pdata->bolsaData->company[i].name);
 
 												ReleaseMutex(pdata->bolsaData->hMutex);
 
